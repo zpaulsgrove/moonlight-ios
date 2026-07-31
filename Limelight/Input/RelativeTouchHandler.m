@@ -134,8 +134,8 @@ static const int REFERENCE_HEIGHT = 720;
                 
                 LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_RIGHT);
                 
-                // Wait 100 ms to simulate a real button press
-                usleep(100 * 1000);
+                // Wait 30 ms to simulate a real button press
+                usleep(30 * 1000);
                 
                 LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_RIGHT);
             });
@@ -146,8 +146,8 @@ static const int REFERENCE_HEIGHT = 720;
                     
                     LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_LEFT);
                     
-                    // Wait 100 ms to simulate a real button press
-                    usleep(100 * 1000);
+                    // Wait 30 ms to simulate a real button press
+                    usleep(30 * 1000);
                 }
                 self->isDragging = false;
                 LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_LEFT);
@@ -190,8 +190,8 @@ static const int REFERENCE_HEIGHT = 720;
         
         LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_LEFT);
         
-        // Wait 100 ms to simulate a real button press
-        usleep(100 * 1000);
+        // Wait 30 ms to simulate a real button press
+        usleep(30 * 1000);
             
         LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_LEFT);
     });

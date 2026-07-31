@@ -22,6 +22,13 @@ float MLDropRatePercent(int networkDroppedFrames, int totalFrames) {
     return 100.0f * ((float)networkDroppedFrames / (float)totalFrames);
 }
 
+NSInteger MLAbrInitialKbps(NSInteger ceiling, NSInteger floor, BOOL isWiFi) {
+    if (!isWiFi) {
+        return ceiling;
+    }
+    return MLClampBitrate((ceiling * 80) / 100, ceiling, floor);
+}
+
 NSInteger MLNextAbrBitrate(NSInteger current,
                            NSInteger ceiling,
                            NSInteger floor,

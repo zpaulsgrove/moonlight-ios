@@ -8,9 +8,12 @@
 
 #import "Utils.h"
 
+#import <Network/Network.h>
+
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include <Limelight.h>
 
 @implementation Utils
 NSString *const deviceName = @"roth";
@@ -62,6 +65,44 @@ NSString *const deviceName = @"roth";
         }
     }
     return NO;
+}
+
++ (BOOL)isActiveNetworkWiFi {
+    __block BOOL usesWiFi = NO;
+    dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+    nw_path_monitor_t monitor = nw_path_monitor_create();
+    nw_path_monitor_set_queue(monitor, dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0));
+    nw_path_monitor_set_update_handler(monitor, ^(nw_path_t path) {
+        usesWiFi = nw_path_uses_interface_type(path, nw_interface_type_wifi);
+        dispatch_semaphore_signal(sem);
+    });
+    nw_path_monitor_start(monitor);
+    // Bound wait so stream setup cannot hang if the path callback is delayed
+    dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(200 * NSEC_PER_MSEC)));
+    nw_path_monitor_cancel(monitor);
+    return usesWiFi;
+}
+
++ (void)streamRemoteMode:(int*)streamingRemotely
+              packetSize:(int*)packetSize
+                   isVPN:(BOOL)isVPN
+            isPrivateLAN:(BOOL)isPrivateLAN
+                  isWiFi:(BOOL)isWiFi {
+    if (streamingRemotely == NULL || packetSize == NULL) {
+        return;
+    }
+    if (isVPN) {
+        *streamingRemotely = STREAM_CFG_REMOTE;
+        *packetSize = 1024;
+    }
+    else if (isPrivateLAN) {
+        *streamingRemotely = STREAM_CFG_LOCAL;
+        *packetSize = isWiFi ? 1024 : 1392;
+    }
+    else {
+        *streamingRemotely = STREAM_CFG_AUTO;
+        *packetSize = 1024;
+    }
 }
 
 + (BOOL)isPrivateAddress:(NSString*)address {

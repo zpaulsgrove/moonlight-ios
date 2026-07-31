@@ -34,7 +34,7 @@
         _connection = connection;
         _ceilingKbps = MAX(config.bitRate, 1000);
         _floorKbps = MAX((_ceilingKbps * 40) / 100, 1000);
-        _currentKbps = _ceilingKbps;
+        _currentKbps = MLAbrInitialKbps(_ceilingKbps, _floorKbps, [Utils isActiveNetworkWiFi]);
         _http = [[HttpManager alloc] initWithAddress:config.host
                                            httpsPort:config.httpsPort
                                           serverCert:config.serverCert];
@@ -88,7 +88,7 @@
             
             self->_supported = YES;
             [self->_timer invalidate];
-            self->_timer = [NSTimer scheduledTimerWithTimeInterval:1.0
+            self->_timer = [NSTimer scheduledTimerWithTimeInterval:0.5
                                                             target:self
                                                           selector:@selector(tick)
                                                           userInfo:nil

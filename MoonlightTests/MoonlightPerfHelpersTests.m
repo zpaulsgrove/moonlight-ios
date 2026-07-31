@@ -75,6 +75,92 @@
     XCTAssertEqual(offsets[1], 6);
 }
 
+- (void)testAnnexBFourByteStartOffsetsAndPrefixes {
+    uint8_t buf[] = {
+        0x00, 0x00, 0x00, 0x01, 0x67, 0x42,
+        0x00, 0x00, 0x00, 0x01, 0x68, 0xCE
+    };
+    int offsets[8] = {0};
+    int prefixes[8] = {0};
+    int count = MLFindAnnexBNals(buf, (int)sizeof(buf), offsets, prefixes, 8);
+    XCTAssertEqual(count, 2);
+    XCTAssertEqual(offsets[0], 0);
+    XCTAssertEqual(prefixes[0], 4);
+    XCTAssertEqual(offsets[1], 6);
+    XCTAssertEqual(prefixes[1], 4);
+}
+
+- (void)testAnnexBRewriteAllFourByteInPlace {
+    uint8_t buf[16] = {
+        0x00, 0x00, 0x00, 0x01, 0xAA, 0xBB,
+        0x00, 0x00, 0x00, 0x01, 0xCC
+    };
+    int outLength = 0;
+    XCTAssertEqual(MLRewriteAnnexBToLengthPrefixed(buf, 11, 16, &outLength), 0);
+    XCTAssertEqual(outLength, 11);
+    // First NAL payload length = 2
+    XCTAssertEqual(buf[0], 0x00);
+    XCTAssertEqual(buf[1], 0x00);
+    XCTAssertEqual(buf[2], 0x00);
+    XCTAssertEqual(buf[3], 0x02);
+    XCTAssertEqual(buf[4], 0xAA);
+    XCTAssertEqual(buf[5], 0xBB);
+    // Second NAL payload length = 1
+    XCTAssertEqual(buf[6], 0x00);
+    XCTAssertEqual(buf[7], 0x00);
+    XCTAssertEqual(buf[8], 0x00);
+    XCTAssertEqual(buf[9], 0x01);
+    XCTAssertEqual(buf[10], 0xCC);
+}
+
+- (void)testAnnexBRewriteThreeByteCompact {
+    uint8_t buf[16] = {
+        0x00, 0x00, 0x01, 0xAA, 0xBB,
+        0x00, 0x00, 0x01, 0xCC
+    };
+    int outLength = 0;
+    XCTAssertEqual(MLRewriteAnnexBToLengthPrefixed(buf, 9, 16, &outLength), 0);
+    XCTAssertEqual(outLength, 11); // +1 byte per 3-byte start code (2 NALs)
+    XCTAssertEqual(buf[0], 0x00);
+    XCTAssertEqual(buf[1], 0x00);
+    XCTAssertEqual(buf[2], 0x00);
+    XCTAssertEqual(buf[3], 0x02);
+    XCTAssertEqual(buf[4], 0xAA);
+    XCTAssertEqual(buf[5], 0xBB);
+    XCTAssertEqual(buf[6], 0x00);
+    XCTAssertEqual(buf[7], 0x00);
+    XCTAssertEqual(buf[8], 0x00);
+    XCTAssertEqual(buf[9], 0x01);
+    XCTAssertEqual(buf[10], 0xCC);
+}
+
+- (void)testStreamPacketSizePathHelper {
+    int remote = 0;
+    int packet = 0;
+    
+    [Utils streamRemoteMode:&remote packetSize:&packet isVPN:YES isPrivateLAN:YES isWiFi:YES];
+    XCTAssertEqual(remote, STREAM_CFG_REMOTE);
+    XCTAssertEqual(packet, 1024);
+    
+    [Utils streamRemoteMode:&remote packetSize:&packet isVPN:NO isPrivateLAN:YES isWiFi:YES];
+    XCTAssertEqual(remote, STREAM_CFG_LOCAL);
+    XCTAssertEqual(packet, 1024);
+    
+    [Utils streamRemoteMode:&remote packetSize:&packet isVPN:NO isPrivateLAN:YES isWiFi:NO];
+    XCTAssertEqual(remote, STREAM_CFG_LOCAL);
+    XCTAssertEqual(packet, 1392);
+    
+    [Utils streamRemoteMode:&remote packetSize:&packet isVPN:NO isPrivateLAN:NO isWiFi:YES];
+    XCTAssertEqual(remote, STREAM_CFG_AUTO);
+    XCTAssertEqual(packet, 1024);
+}
+
+- (void)testAbrInitialKbpsWiFiRamp {
+    XCTAssertEqual(MLAbrInitialKbps(50000, 20000, YES), 40000);
+    XCTAssertEqual(MLAbrInitialKbps(50000, 20000, NO), 50000);
+    XCTAssertEqual(MLAbrInitialKbps(20000, 18000, YES), 18000); // 80% below floor clamps up
+}
+
 - (void)testPresetResolutionFactors {
     XCTAssertEqual(2560 * 1440, 3686400);
     XCTAssertEqual(90, 90);

@@ -20,7 +20,7 @@ Manual soak for **iPad Pro 13" M5** (Wi-Fi client) against **Vibepollo on RTX 50
 | 1920x1080 @ 120 | Alternate |
 | Optional 4K @ 60 | HEVC/AV1 capable path |
 
-Bitrate: start ~40-75 Mbps for 1440p@90/120 on Wi-Fi; slider headroom to ~150 on strong RF.
+Bitrate: start ~40-75 Mbps for 1440p@90/120 on Wi-Fi; slider headroom to ~150 on strong RF. ABR on Wi-Fi should open around **80% of ceiling**.
 
 ## Functional checks
 
@@ -28,14 +28,24 @@ Bitrate: start ~40-75 Mbps for 1440p@90/120 on Wi-Fi; slider headroom to ~150 on
 - [ ] Stream is **16:9 letterboxed** (not native 4:3 VDD)
 - [ ] Host logs show **split-frame / multi-slice** active (`CAPABILITY_SLICES_PER_FRAME(4)`)
 - [ ] Stats: watch **network drop %** and **RTT variance** (Wi-Fi health); host processing latency should stay low on 5090
-- [ ] **ABR** adjusts bitrate without decoder reset when `/api/abr/capabilities` exists
+- [ ] **ABR** starts below ceiling on Wi-Fi and adjusts without decoder reset when `/api/abr/capabilities` exists
 - [ ] Absolute touch uses **native touch** (`LiSendTouchEvent`) when host advertises pen/touch
+- [ ] Relative-mode clicks still register (30 ms synthetic press)
+- [ ] Audio is not hollow / crackly with tighter queue limits
 - [ ] HDR on/off; if host lacks Main10 advertisement, client shows clear SDR fallback UI
 - [ ] Background / foreground resume
-- [ ] Frame pacing on and off
+- [ ] Frame pacing on: **lower latency** on clean Wi-Fi (drains pending); hold-1 only briefly after underrun
+- [ ] No IDR storms when ASBDL is not ready (drops instead of forcing enqueue)
+
+## Latency pass notes (this soak)
+
+- Late-frame drop + age gate should keep the newest frame under jitter without long backlog
+- Private LAN + Wi-Fi client uses `STREAM_CFG_LOCAL` with **packetSize 1024**
+- Single CMBlockBuffer Annex-B rewrite (in-place 4-byte / compact 3-byte); watch for decoder errors
 
 ## Out of scope for this soak
 
+- Off-main assemble / NAL prep
 - Metal / `VTDecompressionSession` rewrite
 - Disabling encryption on LAN
 - FEC=0

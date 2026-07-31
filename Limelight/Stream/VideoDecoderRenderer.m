@@ -10,6 +10,8 @@
 #import "StreamView.h"
 #import "AnnexBHelpers.h"
 
+#include <string.h>
+
 #include <libavcodec/avcodec.h>
 #include <libavcodec/cbs.h>
 #include <libavcodec/cbs_av1.h>
@@ -36,6 +38,8 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
     
     CADisplayLink* _displayLink;
     BOOL framePacing;
+    uint64_t _lastUnderrunMs;
+    BOOL _submittedLastCallback;
 }
 
 - (void)reinitializeDisplayLayer
@@ -90,6 +94,8 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
     _callbacks = callbacks;
     _streamAspectRatio = aspectRatio;
     framePacing = useFramePacing;
+    _lastUnderrunMs = 0;
+    _submittedLastCallback = NO;
     
     parameterSetBuffers = [[NSMutableArray alloc] init];
     
@@ -123,9 +129,28 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
 {
     VIDEO_FRAME_HANDLE handle;
     PDECODE_UNIT du;
+    int polled = 0;
+    int submitted = 0;
+    uint64_t nowMs = LiGetMillis();
+    uint64_t maxAgeMs = (frameRate > 0) ? (1500 / (uint64_t)frameRate) : 25;
     
     while (LiPollNextVideoFrame(&handle, &du)) {
-        LiCompleteVideoFrame(handle, DrSubmitDecodeUnit(du));
+        polled++;
+        
+        // Prefer the newest frame: if more remain queued, skip-decode this older one.
+        BOOL drop = LiGetPendingVideoFrames() >= 1;
+        if (!drop && nowMs > du->enqueueTimeMs &&
+            (nowMs - du->enqueueTimeMs) > maxAgeMs) {
+            drop = YES;
+        }
+        
+        if (drop) {
+            LiCompleteVideoFrame(handle, DR_OK);
+        }
+        else {
+            LiCompleteVideoFrame(handle, DrSubmitDecodeUnit(du));
+            submitted++;
+        }
         
         if (framePacing) {
             // Calculate the actual display refresh rate
@@ -135,14 +160,20 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
             // Battery saver, accessibility settings, or device thermals can cause the actual
             // refresh rate of the display to drop below the physical maximum.
             if (displayRefreshRate >= frameRate * 0.9f) {
-                // Keep one pending frame to smooth out gaps due to
-                // network jitter at the cost of 1 frame of latency
-                if (LiGetPendingVideoFrames() == 1) {
+                // Hold one pending frame only shortly after an underrun to smooth jitter;
+                // otherwise drain to zero pending for lowest latency on clean Wi-Fi.
+                BOOL recentUnderrun = (_lastUnderrunMs != 0 && (nowMs - _lastUnderrunMs) <= 250);
+                if (recentUnderrun && LiGetPendingVideoFrames() == 1) {
                     break;
                 }
             }
         }
     }
+    
+    if (polled == 0 && _submittedLastCallback) {
+        _lastUnderrunMs = nowMs;
+    }
+    _submittedLastCallback = (submitted > 0);
 }
 
 - (void)stop
@@ -150,42 +181,7 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     [_displayLink invalidate];
 }
 
-#define NALU_START_PREFIX_SIZE 3
 #define NAL_LENGTH_PREFIX_SIZE 4
-
-- (void)updateAnnexBBufferForRange:(CMBlockBufferRef)frameBuffer dataBlock:(CMBlockBufferRef)dataBuffer offset:(int)offset length:(int)nalLength
-{
-    OSStatus status;
-    size_t oldOffset = CMBlockBufferGetDataLength(frameBuffer);
-    
-    // Append a 4 byte buffer to the frame block for the length prefix
-    status = CMBlockBufferAppendMemoryBlock(frameBuffer, NULL,
-                                            NAL_LENGTH_PREFIX_SIZE,
-                                            kCFAllocatorDefault, NULL, 0,
-                                            NAL_LENGTH_PREFIX_SIZE, 0);
-    if (status != noErr) {
-        Log(LOG_E, @"CMBlockBufferAppendMemoryBlock failed: %d", (int)status);
-        return;
-    }
-    
-    // Write the length prefix to the new buffer
-    const int dataLength = nalLength - NALU_START_PREFIX_SIZE;
-    const uint8_t lengthBytes[] = {(uint8_t)(dataLength >> 24), (uint8_t)(dataLength >> 16),
-        (uint8_t)(dataLength >> 8), (uint8_t)dataLength};
-    status = CMBlockBufferReplaceDataBytes(lengthBytes, frameBuffer,
-                                           oldOffset, NAL_LENGTH_PREFIX_SIZE);
-    if (status != noErr) {
-        Log(LOG_E, @"CMBlockBufferReplaceDataBytes failed: %d", (int)status);
-        return;
-    }
-    
-    // Attach the data buffer to the frame buffer by reference
-    status = CMBlockBufferAppendBufferReference(frameBuffer, dataBuffer, offset + NALU_START_PREFIX_SIZE, dataLength, 0);
-    if (status != noErr) {
-        Log(LOG_E, @"CMBlockBufferAppendBufferReference failed: %d", (int)status);
-        return;
-    }
-}
 
 - (NSData*)getAv1CodecConfigurationBox:(NSData*)frameData  {
     AVIOContext* ioctx = NULL;
@@ -406,32 +402,78 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     return formatDesc;
 }
 
-// Picture data may be backed by a reusable assembly buffer; we copy into
-// a CMBlockBuffer-owned allocation and never free the caller's pointer.
+// Picture data is gathered once into a CMBlockBuffer-owned allocation (no intermediate assembly buffer).
 - (int)submitDecodeBuffer:(unsigned char *)data length:(int)length bufferType:(int)bufferType decodeUnit:(PDECODE_UNIT)du
 {
     OSStatus status;
     
-    // Construct a new format description object each time we receive an IDR frame
-    if (du->frameType == FRAME_TYPE_IDR) {
-        if (bufferType != BUFFER_TYPE_PICDATA) {
+    // Parameter sets are submitted individually before picture data
+    if (bufferType != BUFFER_TYPE_PICDATA) {
+        if (du->frameType == FRAME_TYPE_IDR) {
             if (bufferType == BUFFER_TYPE_VPS || bufferType == BUFFER_TYPE_SPS || bufferType == BUFFER_TYPE_PPS) {
-                // Add new parameter set into the parameter set array
                 int startLen = data[2] == 0x01 ? 3 : 4;
                 [parameterSetBuffers addObject:[NSData dataWithBytes:&data[startLen] length:length - startLen]];
             }
-            
-            // Data is NOT to be freed here. It's a direct usage of the caller's buffer.
-            
-            // No frame data to submit for these NALUs
-            return DR_OK;
         }
-        
-        // Create the new format description when we get the first picture data buffer of an IDR frame.
-        // This is the only way we know that there is no more CSD for this frame.
-        //
-        // NB: This logic depends on the fact that we submit all picture data in one buffer!
-        
+        // Data is NOT to be freed here. It's a direct usage of the caller's buffer.
+        return DR_OK;
+    }
+    
+    // Capacity leaves headroom so 3-byte Annex-B can compact to 4-byte length prefixes in place
+    int capacity = du->fullLength + 256;
+    if (capacity < 256) {
+        capacity = 256;
+    }
+    
+    CMBlockBufferRef dataBlockBuffer = NULL;
+    status = CMBlockBufferCreateWithMemoryBlock(NULL, NULL, capacity, kCFAllocatorDefault, NULL, 0, capacity,
+                                                kCMBlockBufferAssureMemoryNowFlag, &dataBlockBuffer);
+    if (status != noErr) {
+        Log(LOG_E, @"CMBlockBufferCreateWithMemoryBlock failed: %d", (int)status);
+        return DR_NEED_IDR;
+    }
+    
+    size_t dataOffsetAt = 0;
+    size_t dataLengthAt = 0;
+    char* dataPointer = NULL;
+    status = CMBlockBufferGetDataPointer(dataBlockBuffer, 0, &dataOffsetAt, &dataLengthAt, &dataPointer);
+    if (status != noErr || dataPointer == NULL) {
+        Log(LOG_E, @"CMBlockBufferGetDataPointer failed: %d", (int)status);
+        CFRelease(dataBlockBuffer);
+        return DR_NEED_IDR;
+    }
+    
+    unsigned char* dest = (unsigned char*)dataPointer;
+    int picLength = 0;
+    if (data != NULL && length > 0) {
+        if (length > capacity) {
+            CFRelease(dataBlockBuffer);
+            return DR_NEED_IDR;
+        }
+        memcpy(dest, data, (size_t)length);
+        picLength = length;
+    }
+    else {
+        for (PLENTRY entry = du->bufferList; entry != NULL; entry = entry->next) {
+            if (entry->bufferType != BUFFER_TYPE_PICDATA) {
+                continue;
+            }
+            if (picLength + entry->length > capacity) {
+                CFRelease(dataBlockBuffer);
+                return DR_NEED_IDR;
+            }
+            memcpy(dest + picLength, entry->data, (size_t)entry->length);
+            picLength += entry->length;
+        }
+    }
+    
+    if (picLength <= 0) {
+        CFRelease(dataBlockBuffer);
+        return DR_NEED_IDR;
+    }
+    
+    // Construct a new format description object each time we receive an IDR frame
+    if (du->frameType == FRAME_TYPE_IDR) {
         // Free the old format description
         if (formatDesc != NULL) {
             CFRelease(formatDesc);
@@ -439,7 +481,6 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
         }
         
         if (videoFormat & VIDEO_FORMAT_MASK_H264) {
-            // Construct parameter set arrays for the format description
             size_t parameterSetCount = [parameterSetBuffers count];
             const uint8_t* parameterSetPointers[parameterSetCount];
             size_t parameterSetSizes[parameterSetCount];
@@ -460,12 +501,9 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
                 Log(LOG_E, @"Failed to create H264 format description: %d", (int)status);
                 formatDesc = NULL;
             }
-            
-            // Free parameter set buffers after submission
             [parameterSetBuffers removeAllObjects];
         }
         else if (videoFormat & VIDEO_FORMAT_MASK_H265) {
-            // Construct parameter set arrays for the format description
             size_t parameterSetCount = [parameterSetBuffers count];
             const uint8_t* parameterSetPointers[parameterSetCount];
             size_t parameterSetSizes[parameterSetCount];
@@ -499,97 +537,49 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
                 Log(LOG_E, @"Failed to create HEVC format description: %d", (int)status);
                 formatDesc = NULL;
             }
-            
-            // Free parameter set buffers after submission
             [parameterSetBuffers removeAllObjects];
         }
         else if (videoFormat & VIDEO_FORMAT_MASK_AV1) {
-            NSData* fullFrameData = [NSData dataWithBytesNoCopy:data length:length freeWhenDone:NO];
+            NSData* fullFrameData = [NSData dataWithBytesNoCopy:dest length:picLength freeWhenDone:NO];
             
             Log(LOG_I, @"Constructing new AV1 format description");
             formatDesc = [self createAV1FormatDescriptionForIDRFrame:fullFrameData];
         }
         else {
-            // Unsupported codec!
+            CFRelease(dataBlockBuffer);
             abort();
         }
     }
     
     if (formatDesc == NULL) {
-        // Can't decode if we haven't gotten our parameter sets yet
+        CFRelease(dataBlockBuffer);
         return DR_NEED_IDR;
     }
     
-    // Check for previous decoder errors before doing anything
     if (displayLayer.status == AVQueuedSampleBufferRenderingStatusFailed) {
         Log(LOG_E, @"Display layer rendering failed: %@", displayLayer.error);
-        
-        // Recreate the display layer. We are already on the main thread,
-        // so this is safe to do right here.
         [self reinitializeDisplayLayer];
-        
-        // Request an IDR frame to initialize the new decoder
-        return DR_NEED_IDR;
-    }
-    
-    // Now we're decoding actual frame data here
-    CMBlockBufferRef frameBlockBuffer;
-    CMBlockBufferRef dataBlockBuffer;
-    
-    // Allocate CMBlockBuffer-owned memory and copy so the caller's reusable buffer stays valid
-    status = CMBlockBufferCreateWithMemoryBlock(NULL, NULL, length, kCFAllocatorDefault, NULL, 0, length, kCMBlockBufferAssureMemoryNowFlag, &dataBlockBuffer);
-    if (status != noErr) {
-        Log(LOG_E, @"CMBlockBufferCreateWithMemoryBlock failed: %d", (int)status);
-        return DR_NEED_IDR;
-    }
-    
-    status = CMBlockBufferReplaceDataBytes(data, dataBlockBuffer, 0, length);
-    if (status != noErr) {
-        Log(LOG_E, @"CMBlockBufferReplaceDataBytes failed: %d", (int)status);
         CFRelease(dataBlockBuffer);
         return DR_NEED_IDR;
     }
     
-    // Annex-B rewrite below mutates NAL length prefixes in place via updateAnnexBBufferForRange
-    // which writes into frameBlockBuffer, not dataBlockBuffer's media bytes for the prefix.
-    // We still need a mutable view of the copied data for start-code scanning.
-    size_t dataOffsetAt = 0;
-    size_t dataLengthAt = 0;
-    char* dataPointer = NULL;
-    status = CMBlockBufferGetDataPointer(dataBlockBuffer, 0, &dataOffsetAt, &dataLengthAt, &dataPointer);
-    if (status != noErr || dataPointer == NULL) {
-        Log(LOG_E, @"CMBlockBufferGetDataPointer failed: %d", (int)status);
-        CFRelease(dataBlockBuffer);
-        return DR_NEED_IDR;
-    }
-    unsigned char* scanData = (unsigned char*)dataPointer;
-    
-    status = CMBlockBufferCreateEmpty(NULL, 0, 0, &frameBlockBuffer);
-    if (status != noErr) {
-        Log(LOG_E, @"CMBlockBufferCreateEmpty failed: %d", (int)status);
-        CFRelease(dataBlockBuffer);
-        return DR_NEED_IDR;
-    }
-    
-    // H.264 and HEVC formats require NAL prefix fixups from Annex B to length-delimited
+    int sampleLength = picLength;
     if (videoFormat & (VIDEO_FORMAT_MASK_H264 | VIDEO_FORMAT_MASK_H265)) {
-        int offsets[256];
-        int naluCount = MLFindAnnexBStartOffsets(scanData, length, offsets, 256);
-        for (int n = 0; n < naluCount; n++) {
-            int start = offsets[n];
-            int end = (n + 1 < naluCount) ? offsets[n + 1] : length;
-            [self updateAnnexBBufferForRange:frameBlockBuffer dataBlock:dataBlockBuffer offset:start length:end - start];
-        }
-    }
-    else {
-        // For formats that require no length-changing fixups, just append a reference to the raw data block
-        status = CMBlockBufferAppendBufferReference(frameBlockBuffer, dataBlockBuffer, 0, length, 0);
-        if (status != noErr) {
-            Log(LOG_E, @"CMBlockBufferAppendBufferReference failed: %d", (int)status);
+        int outLength = 0;
+        if (MLRewriteAnnexBToLengthPrefixed(dest, picLength, capacity, &outLength) != 0) {
+            Log(LOG_E, @"Annex-B length-prefix rewrite failed");
             CFRelease(dataBlockBuffer);
-            CFRelease(frameBlockBuffer);
             return DR_NEED_IDR;
         }
+        sampleLength = outLength;
+    }
+    
+    CMBlockBufferRef frameBlockBuffer = NULL;
+    status = CMBlockBufferCreateWithBufferReference(NULL, dataBlockBuffer, 0, sampleLength, 0, &frameBlockBuffer);
+    if (status != noErr) {
+        Log(LOG_E, @"CMBlockBufferCreateWithBufferReference failed: %d", (int)status);
+        CFRelease(dataBlockBuffer);
+        return DR_NEED_IDR;
     }
         
     CMSampleBufferRef sampleBuffer;
@@ -608,6 +598,14 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
         return DR_NEED_IDR;
     }
 
+    // Avoid forcing samples into a saturated layer (leads to Failed + IDR recovery).
+    if (![self->displayLayer isReadyForMoreMediaData]) {
+        CFRelease(dataBlockBuffer);
+        CFRelease(frameBlockBuffer);
+        CFRelease(sampleBuffer);
+        return DR_OK;
+    }
+
     // Enqueue the next frame
     [self->displayLayer enqueueSampleBuffer:sampleBuffer];
     
@@ -619,7 +617,6 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
         [self->_callbacks videoContentShown];
     }
     
-    // Dereference the buffers
     CFRelease(dataBlockBuffer);
     CFRelease(frameBlockBuffer);
     CFRelease(sampleBuffer);

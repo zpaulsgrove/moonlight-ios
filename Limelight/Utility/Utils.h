@@ -27,7 +27,16 @@ FOUNDATION_EXPORT NSString *const deviceName;
 + (NSData*) hexToBytes:(NSString*) hex;
 + (void) addHelpOptionToDialog:(UIAlertController*)dialog;
 + (BOOL)isActiveNetworkVPN;
++ (BOOL)isActiveNetworkWiFi;
 + (BOOL)isPrivateAddress:(NSString*)address;
+
+// Pure path helper for stream packet sizing (testable without live Network probes).
+// VPN: REMOTE+1024; private LAN+Wi-Fi: LOCAL+1024; private LAN wired: LOCAL+1392; else AUTO+1024.
++ (void)streamRemoteMode:(int*)streamingRemotely
+              packetSize:(int*)packetSize
+                   isVPN:(BOOL)isVPN
+            isPrivateLAN:(BOOL)isPrivateLAN
+                  isWiFi:(BOOL)isWiFi;
 + (BOOL)isSunshineLineageAppVersion:(NSString*)appVersion;
 + (BOOL) parseAddressPortString:(NSString*)addressPort address:(NSRange*)address port:(NSRange*)port;
 + (NSString*) addressPortStringToAddress:(NSString*)addressPort;

@@ -45,10 +45,6 @@ static int audioFrameSize;
 
 static VideoDecoderRenderer* renderer;
 
-// Reusable assembly buffer for DrSubmitDecodeUnit picture data
-static unsigned char* decodeAssemblyBuffer = NULL;
-static int decodeAssemblyBufferSize = 0;
-
 int DrDecoderSetup(int videoFormat, int width, int height, int redrawRate, void* context, int drFlags)
 {
     [renderer setupWithVideoFormat:videoFormat width:width height:height frameRate:redrawRate];
@@ -71,7 +67,7 @@ void DrStop(void)
 
 -(BOOL) getVideoStats:(video_stats_t*)stats
 {
-    // We return lastVideoStats because it is a complete 1 second window
+    // We return lastVideoStats because it is a complete stats window
     [videoStatsLock lock];
     if (lastVideoStats.endTime != 0) {
         memcpy(stats, &lastVideoStats, sizeof(*stats));
@@ -115,20 +111,7 @@ void DrStop(void)
 
 int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit)
 {
-    int offset = 0;
     int ret;
-    
-    // Grow a reusable assembly buffer instead of malloc/free per frame
-    if (decodeAssemblyBufferSize < decodeUnit->fullLength) {
-        free(decodeAssemblyBuffer);
-        decodeAssemblyBuffer = (unsigned char*)malloc(decodeUnit->fullLength);
-        if (decodeAssemblyBuffer == NULL) {
-            decodeAssemblyBufferSize = 0;
-            return DR_NEED_IDR;
-        }
-        decodeAssemblyBufferSize = decodeUnit->fullLength;
-    }
-    unsigned char* data = decodeAssemblyBuffer;
     
     CFTimeInterval now = CACurrentMediaTime();
     if (!lastFrameNumber) {
@@ -136,8 +119,8 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit)
         lastFrameNumber = decodeUnit->frameNumber;
     }
     else {
-        // Flip stats roughly every second
-        if (now - currentVideoStats.startTime >= 1.0f) {
+        // Flip stats every 0.5s so ABR sees fresher drop%
+        if (now - currentVideoStats.startTime >= 0.5f) {
             currentVideoStats.endTime = now;
             
             [videoStatsLock lock];
@@ -182,18 +165,12 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit)
                 return ret;
             }
         }
-        else {
-            memcpy(&data[offset], entry->data, entry->length);
-            offset += entry->length;
-        }
-
         entry = entry->next;
     }
 
-    // Renderer copies picture data into a CMBlockBuffer-owned allocation;
-    // the assembly buffer remains ours for reuse.
-    return [renderer submitDecodeBuffer:data
-                                 length:offset
+    // Gather PICDATA once into a CMBlockBuffer inside the renderer (no intermediate assembly copy).
+    return [renderer submitDecodeBuffer:NULL
+                                 length:0
                              bufferType:BUFFER_TYPE_PICDATA
                              decodeUnit:decodeUnit];
 }
@@ -275,14 +252,14 @@ void ArDecodeAndPlaySample(char* sampleData, int sampleLength)
 {
     int decodeLen;
     
-    // Don't queue if there's already more than 30 ms of audio data waiting
+    // Don't queue if there's already more than 20 ms of audio data waiting
     // in Moonlight's audio queue.
-    if (LiGetPendingAudioDuration() > 30) {
+    if (LiGetPendingAudioDuration() > 20) {
         return;
     }
     
     // Drop rather than spin if SDL already has plenty queued (avoids SDL_Delay busy-wait)
-    if (SDL_GetQueuedAudioSize(audioDevice) / audioFrameSize > 10) {
+    if (SDL_GetQueuedAudioSize(audioDevice) / audioFrameSize > 4) {
         return;
     }
     
@@ -464,21 +441,15 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
     // need to check for that here.
     _streamConfig.encryptionFlags = ENCFLG_ALL;
     
-    if ([Utils isActiveNetworkVPN]) {
-        // Force remote streaming mode when a VPN is connected
-        _streamConfig.streamingRemotely = STREAM_CFG_REMOTE;
-        _streamConfig.packetSize = 1024;
-    }
-    else if ([Utils isPrivateAddress:rawAddress]) {
-        // Same-LAN (RFC1918 / mDNS), even when the iPad is on Wi-Fi and the PC is on Ethernet
-        _streamConfig.streamingRemotely = STREAM_CFG_LOCAL;
-        _streamConfig.packetSize = 1392;
-    }
-    else {
-        // Detect remote streaming automatically based on the IP address of the target
-        _streamConfig.streamingRemotely = STREAM_CFG_AUTO;
-        _streamConfig.packetSize = 1392;
-    }
+    int streamingRemotely = STREAM_CFG_AUTO;
+    int packetSize = 1024;
+    [Utils streamRemoteMode:&streamingRemotely
+                 packetSize:&packetSize
+                      isVPN:[Utils isActiveNetworkVPN]
+               isPrivateLAN:[Utils isPrivateAddress:rawAddress]
+                     isWiFi:[Utils isActiveNetworkWiFi]];
+    _streamConfig.streamingRemotely = streamingRemotely;
+    _streamConfig.packetSize = packetSize;
 
     memcpy(_streamConfig.remoteInputAesKey, [config.riKey bytes], [config.riKey length]);
     memset(_streamConfig.remoteInputAesIv, 0, 16);
