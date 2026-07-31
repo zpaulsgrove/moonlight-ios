@@ -64,7 +64,7 @@ static NSMutableSet* hostList;
     // failure callback could be invoked.
     dispatch_sync(dispatch_get_main_queue(), ^{
         self->_pairAlert = [UIAlertController alertControllerWithTitle:@"Pairing"
-                                                               message:[NSString stringWithFormat:@"Enter the following PIN on the host machine: %@\n\nIf your host PC is running Sunshine, navigate to the Sunshine web UI to enter the PIN.", PIN]
+                                                               message:[NSString stringWithFormat:@"Enter the following PIN on the host machine: %@\n\nIf your host PC is running Sunshine, Apollo, or Vibepollo, navigate to the host web UI to enter the PIN.", PIN]
                                                         preferredStyle:UIAlertControllerStyleAlert];
         [self->_pairAlert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleDestructive handler:^(UIAlertAction* action) {
             self->_pairAlert = nil;
@@ -614,9 +614,23 @@ static NSMutableSet* hostList;
     
     _streamConfig.frameRate = [streamSettings.framerate intValue];
     if (@available(iOS 10.3, *)) {
-        // Don't stream more FPS than the display can show
-        if (_streamConfig.frameRate > [UIScreen mainScreen].maximumFramesPerSecond) {
-            _streamConfig.frameRate = (int)[UIScreen mainScreen].maximumFramesPerSecond;
+        // Don't stream more FPS than the active display can show
+        NSInteger maxFps = [UIScreen mainScreen].maximumFramesPerSecond;
+        if (@available(iOS 13.0, *)) {
+            for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+                if (![scene isKindOfClass:[UIWindowScene class]]) {
+                    continue;
+                }
+                UIWindowScene *windowScene = (UIWindowScene *)scene;
+                if (windowScene.activationState == UISceneActivationStateForegroundActive ||
+                    windowScene.activationState == UISceneActivationStateForegroundInactive) {
+                    maxFps = windowScene.screen.maximumFramesPerSecond;
+                    break;
+                }
+            }
+        }
+        if (_streamConfig.frameRate > maxFps) {
+            _streamConfig.frameRate = (int)maxFps;
             Log(LOG_W, @"Clamping FPS to maximum refresh rate: %d", _streamConfig.frameRate);
         }
     }
@@ -662,26 +676,36 @@ static NSMutableSet* hostList;
     
     _streamConfig.serverCodecModeSupport = app.host.serverCodecModeSupport;
     
+    // Codec Auto prefers AV1 when the host advertises it (e.g. RTX 5090 / Vibepollo),
+    // otherwise HEVC, then always includes H.264 as a fallback. Explicit user picks win.
+    BOOL includeAv1 = NO;
+    BOOL includeHevc = NO;
     switch (streamSettings.preferredCodec) {
         case CODEC_PREF_AV1:
-#if defined(__IPHONE_16_0) || defined(__TVOS_16_0)
-            if (VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1)) {
-                _streamConfig.supportedVideoFormats |= VIDEO_FORMAT_AV1_MAIN8;
-            }
-#endif
-            // Fall-through
-            
+            includeAv1 = YES;
+            includeHevc = YES;
+            break;
         case CODEC_PREF_AUTO:
+            includeAv1 = (app.host.serverCodecModeSupport & SCM_MASK_AV1) != 0;
+            includeHevc = YES;
+            break;
         case CODEC_PREF_HEVC:
-            if (VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC)) {
-                _streamConfig.supportedVideoFormats |= VIDEO_FORMAT_H265;
-            }
-            // Fall-through
-            
+            includeHevc = YES;
+            break;
         case CODEC_PREF_H264:
-            _streamConfig.supportedVideoFormats |= VIDEO_FORMAT_H264;
+        default:
             break;
     }
+    
+#if defined(__IPHONE_16_0) || defined(__TVOS_16_0)
+    if (includeAv1 && VTIsHardwareDecodeSupported(kCMVideoCodecType_AV1)) {
+        _streamConfig.supportedVideoFormats |= VIDEO_FORMAT_AV1_MAIN8;
+    }
+#endif
+    if (includeHevc && VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC)) {
+        _streamConfig.supportedVideoFormats |= VIDEO_FORMAT_H265;
+    }
+    _streamConfig.supportedVideoFormats |= VIDEO_FORMAT_H264;
     
     // HEVC is supported if the user wants it (or it's required by the chosen resolution) and the SoC supports it
     if ((_streamConfig.width > 4096 || _streamConfig.height > 4096 || streamSettings.enableHdr) && VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC)) {

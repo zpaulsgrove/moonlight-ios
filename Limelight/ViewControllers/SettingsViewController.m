@@ -50,9 +50,28 @@ static const int bitrateTable[] = {
     150000,
 };
 
-const int RESOLUTION_TABLE_SIZE = 7;
+const int RESOLUTION_TABLE_SIZE = 8;
 const int RESOLUTION_TABLE_CUSTOM_INDEX = RESOLUTION_TABLE_SIZE - 1;
+const int RESOLUTION_TABLE_4K_INDEX = 4;
 CGSize resolutionTable[RESOLUTION_TABLE_SIZE];
+
++ (UIScreen*)activeScreen {
+    if (@available(iOS 13.0, *)) {
+        // Prefer the screen backing an active window scene when available
+        for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+            if (![scene isKindOfClass:[UIWindowScene class]]) {
+                continue;
+            }
+            UIWindowScene *windowScene = (UIWindowScene *)scene;
+            if (windowScene.activationState != UISceneActivationStateForegroundActive &&
+                windowScene.activationState != UISceneActivationStateForegroundInactive) {
+                continue;
+            }
+            return windowScene.screen;
+        }
+    }
+    return [UIScreen mainScreen];
+}
 
 -(int)getSliderValueForBitrate:(NSInteger)bitrate {
     int i;
@@ -155,14 +174,15 @@ BOOL isCustomResolution(CGSize res) {
     resolutionTable[0] = CGSizeMake(640, 360);
     resolutionTable[1] = CGSizeMake(1280, 720);
     resolutionTable[2] = CGSizeMake(1920, 1080);
-    resolutionTable[3] = CGSizeMake(3840, 2160);
-    resolutionTable[4] = CGSizeMake(safeAreaWidth, fullScreenHeight);
-    resolutionTable[5] = CGSizeMake(fullScreenWidth, fullScreenHeight);
-    resolutionTable[6] = CGSizeMake([currentSettings.width integerValue], [currentSettings.height integerValue]); // custom initial value
+    resolutionTable[3] = CGSizeMake(2560, 1440);
+    resolutionTable[4] = CGSizeMake(3840, 2160);
+    resolutionTable[5] = CGSizeMake(safeAreaWidth, fullScreenHeight);
+    resolutionTable[6] = CGSizeMake(fullScreenWidth, fullScreenHeight);
+    resolutionTable[7] = CGSizeMake([currentSettings.width integerValue], [currentSettings.height integerValue]); // custom initial value
     
     // Don't populate the custom entry unless we have a custom resolution
-    if (!isCustomResolution(resolutionTable[6])) {
-        resolutionTable[6] = CGSizeMake(0, 0);
+    if (!isCustomResolution(resolutionTable[7])) {
+        resolutionTable[7] = CGSizeMake(0, 0);
     }
     
     NSInteger framerate;
@@ -174,8 +194,11 @@ BOOL isCustomResolution(CGSize res) {
         case 60:
             framerate = 1;
             break;
-        case 120:
+        case 90:
             framerate = 2;
+            break;
+        case 120:
+            framerate = 3;
             break;
     }
 
@@ -188,15 +211,20 @@ BOOL isCustomResolution(CGSize res) {
         }
     }
 
-    // Only show the 120 FPS option if we have a > 60-ish Hz display
-    bool enable120Fps = false;
+    // Only show 90/120 FPS when the active display is ProMotion-class (> ~60 Hz)
+    bool enableHighFps = false;
     if (@available(iOS 10.3, tvOS 10.3, *)) {
-        if ([UIScreen mainScreen].maximumFramesPerSecond > 62) {
-            enable120Fps = true;
+        if ([[self class] activeScreen].maximumFramesPerSecond > 62) {
+            enableHighFps = true;
         }
     }
-    if (!enable120Fps) {
+    if (!enableHighFps) {
+        // Remove 120 then 90 (indices 3 and 2) so 30/60 remain
+        [self.framerateSelector removeSegmentAtIndex:3 animated:NO];
         [self.framerateSelector removeSegmentAtIndex:2 animated:NO];
+        if (framerate > 1) {
+            framerate = 1;
+        }
     }
 
     // Disable codec selector segments for unsupported codecs
@@ -211,7 +239,7 @@ BOOL isCustomResolution(CGSize res) {
 
         // Only enable the 4K option for "recent" devices. We'll judge that by whether
         // they support HEVC decoding (A9 or later).
-        [self.resolutionSelector setEnabled:NO forSegmentAtIndex:3];
+        [self.resolutionSelector setEnabled:NO forSegmentAtIndex:RESOLUTION_TABLE_4K_INDEX];
     }
     switch (currentSettings.preferredCodec) {
         case CODEC_PREF_AUTO:
@@ -326,7 +354,8 @@ BOOL isCustomResolution(CGSize res) {
     }
 
     defaultBitrate = round(resolutionFactor * frameRateFactor) * 1000;
-    _bitrate = MIN(defaultBitrate, 100000);
+    // Allow autoscaling up to the slider maximum (~150 Mbps) for strong RF conditions
+    _bitrate = MIN(defaultBitrate, 150000);
     [self.bitrateSlider setValue:[self getSliderValueForBitrate:_bitrate] animated:YES];
     
     [self updateBitrateText];
@@ -468,12 +497,27 @@ BOOL isCustomResolution(CGSize res) {
 }
 
 - (NSInteger) getChosenFrameRate {
-    switch ([self.framerateSelector selectedSegmentIndex]) {
+    // When high-FPS segments were removed, only 30/60 remain at indices 0/1
+    NSInteger selected = [self.framerateSelector selectedSegmentIndex];
+    if (self.framerateSelector.numberOfSegments < 4) {
+        switch (selected) {
+            case 0:
+                return 30;
+            case 1:
+                return 60;
+            default:
+                abort();
+        }
+    }
+    
+    switch (selected) {
         case 0:
             return 30;
         case 1:
             return 60;
         case 2:
+            return 90;
+        case 3:
             return 120;
         default:
             abort();

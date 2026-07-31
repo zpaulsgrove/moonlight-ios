@@ -154,6 +154,28 @@
         NSEntityDescription* entity = [NSEntityDescription entityForName:@"Settings" inManagedObjectContext:_managedObjectContext];
         Settings* settings = [[Settings alloc] initWithEntity:entity insertIntoManagedObjectContext:_managedObjectContext];
         
+#if !TARGET_OS_TV
+        // iPad Pro 13" class (Ultra Retina XDR / ProMotion): recommend letterboxed 1440p@120
+        // with Wi-Fi-friendly bitrate and frame pacing on.
+        if ([UIDevice currentDevice].userInterfaceIdiom == UIUserInterfaceIdiomPad) {
+            UIScreen *screen = [UIScreen mainScreen];
+            CGSize native = screen.nativeBounds.size;
+            CGFloat longEdge = MAX(native.width, native.height);
+            BOOL proMotion = NO;
+            if (@available(iOS 10.3, *)) {
+                proMotion = screen.maximumFramesPerSecond > 62;
+            }
+            if (proMotion && longEdge >= 2700) {
+                settings.width = @2560;
+                settings.height = @1440;
+                settings.framerate = @120;
+                // ~57 Mbps from the Qt-style formula for 1440p@120; within 40-75 Wi-Fi band
+                settings.bitrate = @57000;
+                settings.useFramePacing = YES;
+            }
+        }
+#endif
+        
         return settings;
     } else {
         // we should only ever have 1 settings object stored
