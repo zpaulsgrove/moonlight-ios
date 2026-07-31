@@ -22,6 +22,8 @@
     NSInteger _currentKbps;
     BOOL _supported;
     int _stableTicks;
+    NSInteger _generation;
+    BOOL _applyInFlight;
 }
 
 - (instancetype)initWithConfig:(StreamConfiguration*)config
@@ -59,18 +61,33 @@
         return;
     }
     
+    NSInteger gen = _generation;
+    
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        if (gen != self->_generation) {
+            return;
+        }
+        
         BOOL ok = [self->_http probeAbrCapabilities];
         if (!ok) {
             Log(LOG_I, @"ABR unavailable on host (no /api/abr/capabilities)");
             return;
         }
         
-        self->_supported = YES;
+        if (gen != self->_generation) {
+            return;
+        }
+        
         Log(LOG_I, @"ABR enabled (local controller, ceiling %ld kbps, floor %ld kbps)",
             (long)self->_ceilingKbps, (long)self->_floorKbps);
         
         dispatch_async(dispatch_get_main_queue(), ^{
+            if (gen != self->_generation) {
+                return;
+            }
+            
+            self->_supported = YES;
+            [self->_timer invalidate];
             self->_timer = [NSTimer scheduledTimerWithTimeInterval:1.0
                                                             target:self
                                                           selector:@selector(tick)
@@ -81,12 +98,15 @@
 }
 
 - (void)stop {
+    _generation++;
+    _supported = NO;
+    _applyInFlight = NO;
     [_timer invalidate];
     _timer = nil;
 }
 
 - (void)tick {
-    if (!_supported) {
+    if (!_supported || _applyInFlight) {
         return;
     }
     
@@ -105,7 +125,7 @@
         return;
     }
     
-    float dropRatePercent = (stats.networkDroppedFrames / interval);
+    float dropRatePercent = MLDropRatePercent(stats.networkDroppedFrames, stats.totalFrames);
     uint32_t rtt = 0, variance = 0;
     LiGetEstimatedRttInfo(&rtt, &variance);
     
@@ -122,15 +142,27 @@
     }
     
     NSInteger target = next;
-    _currentKbps = target;
+    NSInteger gen = _generation;
+    _applyInFlight = YES;
     _stableTicks = 0;
     
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         BOOL applied = [self->_http setStreamBitrateKbps:target];
-        if (applied) {
-            Log(LOG_I, @"ABR set bitrate to %ld kbps (drops=%.2f%% rttVar=%u)",
-                (long)target, dropRatePercent, variance);
-        }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (gen != self->_generation) {
+                return;
+            }
+            self->_applyInFlight = NO;
+            if (applied) {
+                self->_currentKbps = target;
+                Log(LOG_I, @"ABR set bitrate to %ld kbps (drops=%.2f%% rttVar=%u)",
+                    (long)target, dropRatePercent, variance);
+            }
+            else {
+                Log(LOG_W, @"ABR bitrate apply failed for %ld kbps; keeping %ld kbps",
+                    (long)target, (long)self->_currentKbps);
+            }
+        });
     });
 }
 

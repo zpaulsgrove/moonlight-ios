@@ -15,6 +15,13 @@ NSInteger MLClampBitrate(NSInteger candidate, NSInteger ceiling, NSInteger floor
     return candidate;
 }
 
+float MLDropRatePercent(int networkDroppedFrames, int totalFrames) {
+    if (totalFrames <= 0 || networkDroppedFrames <= 0) {
+        return 0.0f;
+    }
+    return 100.0f * ((float)networkDroppedFrames / (float)totalFrames);
+}
+
 NSInteger MLNextAbrBitrate(NSInteger current,
                            NSInteger ceiling,
                            NSInteger floor,
@@ -22,7 +29,7 @@ NSInteger MLNextAbrBitrate(NSInteger current,
                            uint32_t rttVarianceMs) {
     NSInteger next = current;
     
-    // React primarily to Wi-Fi last-mile symptoms (drops + RTT variance)
+    // React primarily to Wi-Fi last-mile symptoms (drop percent + RTT variance)
     if (dropRatePercent > 5.0f || rttVarianceMs > 40) {
         next = (NSInteger)(current * 0.70);
     }

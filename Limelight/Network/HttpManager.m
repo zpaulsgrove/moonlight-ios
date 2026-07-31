@@ -376,7 +376,18 @@
 }
 
 - (BOOL)setStreamBitrateKbps:(NSInteger)bitrateKbps {
-    return [self performHttpsGetReturningStatus:[self newBitrateRequest:bitrateKbps] responseBody:nil];
+    NSData* body = nil;
+    if (![self performHttpsGetReturningStatus:[self newBitrateRequest:bitrateKbps] responseBody:&body]) {
+        return NO;
+    }
+    // GameStream hosts report success via XML status_code (200), not HTTP alone.
+    // HTTP 200 with status_code=0 means the bitrate apply failed.
+    if (body.length == 0) {
+        return NO;
+    }
+    HttpResponse* resp = [[HttpResponse alloc] init];
+    [resp populateWithData:body];
+    return [resp isStatusOk];
 }
 
 - (NSString*) bytesToHex:(NSData*)data {

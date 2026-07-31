@@ -37,6 +37,13 @@
     XCTAssertLessThanOrEqual(afterStable, ceiling);
 }
 
+- (void)testAbrDropRatePercent {
+    XCTAssertEqualWithAccuracy(MLDropRatePercent(0, 120), 0.0f, 0.001f);
+    XCTAssertEqualWithAccuracy(MLDropRatePercent(6, 120), 5.0f, 0.001f);
+    XCTAssertEqualWithAccuracy(MLDropRatePercent(1, 100), 1.0f, 0.001f);
+    XCTAssertEqualWithAccuracy(MLDropRatePercent(5, 0), 0.0f, 0.001f);
+}
+
 - (void)testPrivateAddressAndSunshineLineage {
     XCTAssertTrue([Utils isPrivateAddress:@"192.168.1.20"]);
     XCTAssertTrue([Utils isPrivateAddress:@"10.0.0.5"]);

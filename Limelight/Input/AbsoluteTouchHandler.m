@@ -35,24 +35,32 @@
     CGPoint lastTouchDownLocation;
     UITouch* lastTouchUp;
     CGPoint lastTouchUpLocation;
-    BOOL nativeTouchChecked;
+    BOOL nativeTouchResolved;
     BOOL useNativeTouch;
 }
 
 - (id)initWithView:(StreamView*)view {
     self = [self init];
     self->view = view;
-    self->nativeTouchChecked = NO;
+    self->nativeTouchResolved = NO;
     self->useNativeTouch = NO;
     return self;
 }
 
 - (BOOL)shouldUseNativeTouch {
-    if (!nativeTouchChecked) {
-        // Host feature flags are populated after LiStartConnection; probe on first use
-        useNativeTouch = (LiGetHostFeatureFlags() & LI_FF_PEN_TOUCH_EVENTS) != 0;
-        nativeTouchChecked = YES;
+    if (nativeTouchResolved) {
+        return useNativeTouch;
     }
+    
+    // Feature flags are populated during RTSP. Keep probing until they are non-zero
+    // so we do not permanently latch mouse emulation before LiStartConnection finishes.
+    uint32_t flags = LiGetHostFeatureFlags();
+    if (flags == 0) {
+        return NO;
+    }
+    
+    useNativeTouch = (flags & LI_FF_PEN_TOUCH_EVENTS) != 0;
+    nativeTouchResolved = YES;
     return useNativeTouch;
 }
 
@@ -60,6 +68,7 @@
     CGPoint location = [view adjustCoordinatesForVideoArea:[touch locationInView:view]];
     CGSize videoSize = [view getVideoAreaSize];
     if (videoSize.width <= 0 || videoSize.height <= 0) {
+        // Layout not ready yet; do not disable native touch for the session.
         return NO;
     }
     
@@ -74,7 +83,14 @@
     uint32_t pointerId = (uint32_t)(uintptr_t)touch;
     
     int err = LiSendTouchEvent(type, pointerId, x, y, pressure, 0.0f, 0.0f, LI_ROT_UNKNOWN);
-    return err != LI_ERR_UNSUPPORTED;
+    return err == 0;
+}
+
+- (void)fallbackToMouseEmulationAfterNativeFailure {
+    // Cancel any pointers already sent as native downs before switching paths.
+    LiSendTouchEvent(LI_TOUCH_EVENT_CANCEL_ALL, 0, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, LI_ROT_UNKNOWN);
+    useNativeTouch = NO;
+    nativeTouchResolved = YES;
 }
 
 - (void)onLongPressStart:(NSTimer*)timer {
@@ -85,16 +101,23 @@
 
 - (void)touchesBegan:(NSSet *)touches withEvent:(UIEvent *)event {
     if ([self shouldUseNativeTouch]) {
+        BOOL allSent = YES;
         for (UITouch* touch in touches) {
             if (![self sendNativeTouch:touch withType:LI_TOUCH_EVENT_DOWN]) {
-                useNativeTouch = NO;
+                allSent = NO;
                 break;
             }
         }
-        if (useNativeTouch) {
+        if (allSent) {
             return;
         }
-        // Host rejected native touch; fall through to mouse emulation for this gesture
+        
+        CGSize videoSize = [view getVideoAreaSize];
+        if (videoSize.width > 0 && videoSize.height > 0) {
+            // Host/queue rejected native touch after layout was ready; cancel and latch mouse.
+            [self fallbackToMouseEmulationAfterNativeFailure];
+        }
+        // Else layout not ready: leave native mode unresolved and use mouse for this gesture only.
     }
     
     // Ignore touch down events with more than one finger
