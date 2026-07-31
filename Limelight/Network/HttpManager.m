@@ -265,9 +265,17 @@
     // Using an FPS value over 60 causes SOPS to default to 720p60,
     // so force it to 0 to ensure the correct resolution is set. We
     // used to use 60 here but that locked the frame rate to 60 FPS
-    // on GFE 3.20.3. We do not do this hack for Sunshine (which is
-    // indicated by a negative version in the last field.
-    int fps = (config.frameRate > 60 && ![config.appVersion containsString:@".-"]) ? 0 : config.frameRate;
+    // on GFE 3.20.3. We do not do this hack for Sunshine-lineage hosts
+    // (Sunshine / Apollo / Vibepollo), indicated by a negative version
+    // quad in appversion.
+    int fps = (config.frameRate > 60 && ![Utils isSunshineLineageAppVersion:config.appVersion]) ? 0 : config.frameRate;
+    
+    // Ultra Retina XDR-class client HDR caps: Rec.2020 primaries / D65 white,
+    // ~1000 nits fullscreen / ~1600 nits peak (CTA-861.3-style static metadata units).
+    NSString* hdrParams = @"";
+    if (config.supportedVideoFormats & VIDEO_FORMAT_MASK_10BIT) {
+        hdrParams = @"&hdrMode=1&clientHdrCapVersion=0&clientHdrCapSupportedFlagsInUint32=0&clientHdrCapMetaDataId=NV_STATIC_METADATA_TYPE_1&clientHdrCapDisplayData=35400x14600x8500x39850x6550x2300x15635x16450x0x1000x1600";
+    }
     
     NSString* urlString = [NSString stringWithFormat:@"%@/%@?uniqueid=%@&appid=%@&mode=%dx%dx%d&additionalStates=1&sops=%d&rikey=%@&rikeyid=%d%@&localAudioPlayMode=%d&surroundAudioInfo=%d&remoteControllersBitmap=%d&gcmap=%d&gcpersist=%d%s",
                            _baseHTTPSURL, verb, _uniqueId,
@@ -275,7 +283,7 @@
                            config.width, config.height, fps,
                            config.optimizeGameSettings ? 1 : 0,
                            [Utils bytesToHex:config.riKey], config.riKeyId,
-                           (config.supportedVideoFormats & VIDEO_FORMAT_MASK_10BIT) ? @"&hdrMode=1&clientHdrCapVersion=0&clientHdrCapSupportedFlagsInUint32=0&clientHdrCapMetaDataId=NV_STATIC_METADATA_TYPE_1&clientHdrCapDisplayData=0x0x0x0x0x0x0x0x0x0x0": @"",
+                           hdrParams,
                            config.playAudioOnPC ? 1 : 0,
                            SURROUNDAUDIOINFO_FROM_AUDIO_CONFIGURATION(config.audioConfiguration),
                            config.gamepadMask, config.gamepadMask,
@@ -302,6 +310,73 @@
     
     NSString* urlString = [NSString stringWithFormat:@"%@/appasset?uniqueid=%@&appid=%@&AssetType=2&AssetIdx=0", _baseHTTPSURL, _uniqueId, appId];
     return [self createRequestFromString:urlString timeout:NORMAL_TIMEOUT_SEC];
+}
+
+- (NSURLRequest*) newAbrCapabilitiesRequest {
+    if (![self ensureHttpsUrlPopulated:YES]) {
+        return nil;
+    }
+    NSString* urlString = [NSString stringWithFormat:@"%@/api/abr/capabilities", _baseHTTPSURL];
+    return [self createRequestFromString:urlString timeout:SHORT_TIMEOUT_SEC];
+}
+
+- (NSURLRequest*) newBitrateRequest:(NSInteger)bitrateKbps {
+    if (![self ensureHttpsUrlPopulated:YES]) {
+        return nil;
+    }
+    NSString* urlString = [NSString stringWithFormat:@"%@/bitrate?bitrate=%ld", _baseHTTPSURL, (long)bitrateKbps];
+    return [self createRequestFromString:urlString timeout:SHORT_TIMEOUT_SEC];
+}
+
+- (BOOL)performHttpsGetReturningStatus:(NSURLRequest*)request responseBody:(NSData* __autoreleasing *)bodyOut {
+    if (request == nil) {
+        return NO;
+    }
+    
+    __block NSInteger httpStatus = 0;
+    __block NSData* body = nil;
+    __block dispatch_semaphore_t lock = dispatch_semaphore_create(0);
+    
+    NSURLSession* urlSession = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration ephemeralSessionConfiguration] delegate:self delegateQueue:nil];
+    [[urlSession dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        if (error == nil && [response isKindOfClass:[NSHTTPURLResponse class]]) {
+            httpStatus = [(NSHTTPURLResponse*)response statusCode];
+            body = data;
+        }
+        dispatch_semaphore_signal(lock);
+    }] resume];
+    
+    dispatch_semaphore_wait(lock, DISPATCH_TIME_FOREVER);
+    [urlSession invalidateAndCancel];
+    
+    if (bodyOut) {
+        *bodyOut = body;
+    }
+    return httpStatus >= 200 && httpStatus < 300;
+}
+
+- (BOOL)probeAbrCapabilities {
+    NSData* body = nil;
+    if (![self performHttpsGetReturningStatus:[self newAbrCapabilitiesRequest] responseBody:&body]) {
+        return NO;
+    }
+    // Endpoint exists. Vibepollo returns supported:false to signal client-local ABR via /bitrate.
+    // Presence of the route (or runtime_bitrate feature) is enough to enable our local controller.
+    if (body.length == 0) {
+        return YES;
+    }
+    NSString* text = [[NSString alloc] initWithData:body encoding:NSUTF8StringEncoding];
+    if (text == nil) {
+        return YES;
+    }
+    if ([text containsString:@"runtime_bitrate"] || [text containsString:@"supported"]) {
+        return YES;
+    }
+    return YES;
+}
+
+- (BOOL)setStreamBitrateKbps:(NSInteger)bitrateKbps {
+    return [self performHttpsGetReturningStatus:[self newBitrateRequest:bitrateKbps] responseBody:nil];
 }
 
 - (NSString*) bytesToHex:(NSData*)data {

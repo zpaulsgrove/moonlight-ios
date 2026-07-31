@@ -29,6 +29,10 @@
 - (NSURLRequest*) newLaunchOrResumeRequest:(NSString*)verb config:(StreamConfiguration*)config;
 - (NSURLRequest*) newQuitAppRequest;
 - (NSURLRequest*) newAppAssetRequestWithAppId:(NSString*)appId;
+- (NSURLRequest*) newAbrCapabilitiesRequest;
+- (NSURLRequest*) newBitrateRequest:(NSInteger)bitrateKbps;
+- (BOOL)probeAbrCapabilities;
+- (BOOL)setStreamBitrateKbps:(NSInteger)bitrateKbps;
 - (void) executeRequestSynchronously:(HttpRequest*)request;
 
 @end

@@ -7,6 +7,19 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A1B2C3D4E5F60718293A4B13 /* AbrBitrateHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B11 /* AbrBitrateHelpers.m */; };
+		A1B2C3D4E5F60718293A4B14 /* AbrBitrateHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B11 /* AbrBitrateHelpers.m */; };
+		A1B2C3D4E5F60718293A4B15 /* AbrBitrateHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B11 /* AbrBitrateHelpers.m */; };
+		A1B2C3D4E5F60718293A4B16 /* AnnexBHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B05 /* AnnexBHelpers.m */; };
+		A1B2C3D4E5F60718293A4B17 /* Utils.m in Sources */ = {isa = PBXBuildFile; fileRef = FB89462219F646E200339C8A /* Utils.m */; };
+		A1B2C3D4E5F60718293A4B18 /* Logger.m in Sources */ = {isa = PBXBuildFile; fileRef = FBD1C8E11A8AD71400C6703C /* Logger.m */; };
+
+		A1B2C3D4E5F60718293A4B03 /* AbrController.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B01 /* AbrController.m */; };
+		A1B2C3D4E5F60718293A4B04 /* AbrController.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B01 /* AbrController.m */; };
+		A1B2C3D4E5F60718293A4B07 /* AnnexBHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B05 /* AnnexBHelpers.m */; };
+		A1B2C3D4E5F60718293A4B08 /* AnnexBHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B05 /* AnnexBHelpers.m */; };
+		8CE916B7B43F4C1C87CDB6EC /* MoonlightPerfHelpersTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 2639EAF244624C7E9F140C0C /* MoonlightPerfHelpersTests.m */; };
+		B0C1D2E3F405162738495A02 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B0C1D2E3F405162738495A01 /* XCTest.framework */; };
 		693B3A9B218638CD00982F7B /* Settings.bundle in Resources */ = {isa = PBXBuildFile; fileRef = 693B3A9A218638CD00982F7B /* Settings.bundle */; };
 		98181BE92791277400E43572 /* libSDL2.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 98181BE82791275D00E43572 /* libSDL2.a */; };
 		98181BEB2791278F00E43572 /* libSDL2.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 98181BEA2791278300E43572 /* libSDL2.a */; };
@@ -170,6 +183,16 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		A1B2C3D4E5F60718293A4B11 /* AbrBitrateHelpers.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AbrBitrateHelpers.m; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B12 /* AbrBitrateHelpers.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AbrBitrateHelpers.h; sourceTree = "<group>"; };
+
+		A1B2C3D4E5F60718293A4B01 /* AbrController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AbrController.m; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B02 /* AbrController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AbrController.h; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B05 /* AnnexBHelpers.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AnnexBHelpers.m; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B06 /* AnnexBHelpers.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AnnexBHelpers.h; sourceTree = "<group>"; };
+		2639EAF244624C7E9F140C0C /* MoonlightPerfHelpersTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MoonlightPerfHelpersTests.m; sourceTree = "<group>"; };
+		7AE9F435BAE0437689FA5AF0 /* MoonlightTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MoonlightTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B0C1D2E3F405162738495A01 /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = System/Library/Frameworks/XCTest.framework; sourceTree = SDKROOT; };
 		566E9D2B2770B23A00EF7BFE /* Moonlight v1.7.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.7.xcdatamodel"; sourceTree = "<group>"; };
 		693B3A9A218638CD00982F7B /* Settings.bundle */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.plug-in"; path = Settings.bundle; sourceTree = "<group>"; };
 		9803CCAB254F9EAF00EE185E /* ConnectionCallbacks.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ConnectionCallbacks.h; sourceTree = "<group>"; };
@@ -362,6 +385,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+
+		CA04994B98F94AA89BCCCCF5 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -397,6 +428,7 @@
 		FB290CE519B2C406004C83CF = {
 			isa = PBXGroup;
 			children = (
+				E048FF507B564C238269A4B6 /* MoonlightTests */,
 				9896219423D15C2900211983 /* X1Kit */,
 				98AB2E7F1CAD46830089BB98 /* moonlight-common.xcodeproj */,
 				FB290CF919B2C406004C83CF /* Moonlight */,
@@ -410,6 +442,7 @@
 			isa = PBXGroup;
 			children = (
 				FB290CEE19B2C406004C83CF /* Moonlight.app */,
+				7AE9F435BAE0437689FA5AF0 /* MoonlightTests.xctest */,
 				FB1A67532132419700507771 /* Moonlight TV.app */,
 			);
 			name = Products;
@@ -544,6 +577,8 @@
 			children = (
 				FB89461619F646E200339C8A /* Connection.h */,
 				FB89461719F646E200339C8A /* Connection.m */,
+				A1B2C3D4E5F60718293A4B02 /* AbrController.h */,
+				A1B2C3D4E5F60718293A4B01 /* AbrController.m */,
 				FB89461819F646E200339C8A /* StreamConfiguration.h */,
 				FB89461919F646E200339C8A /* StreamConfiguration.m */,
 				FB89461A19F646E200339C8A /* StreamManager.h */,
@@ -560,6 +595,10 @@
 			children = (
 				FB89462119F646E200339C8A /* Utils.h */,
 				FB89462219F646E200339C8A /* Utils.m */,
+				A1B2C3D4E5F60718293A4B06 /* AnnexBHelpers.h */,
+				A1B2C3D4E5F60718293A4B05 /* AnnexBHelpers.m */,
+				A1B2C3D4E5F60718293A4B12 /* AbrBitrateHelpers.h */,
+				A1B2C3D4E5F60718293A4B11 /* AbrBitrateHelpers.m */,
 				FBD1C8E01A8AD69E00C6703C /* Logger.h */,
 				FBD1C8E11A8AD71400C6703C /* Logger.m */,
 			);
@@ -685,6 +724,15 @@
 			name = Database;
 			sourceTree = "<group>";
 		};
+
+		E048FF507B564C238269A4B6 /* MoonlightTests */ = {
+			isa = PBXGroup;
+			children = (
+				2639EAF244624C7E9F140C0C /* MoonlightPerfHelpersTests.m */,
+			);
+			path = MoonlightTests;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -730,6 +778,24 @@
 			productReference = FB290CEE19B2C406004C83CF /* Moonlight.app */;
 			productType = "com.apple.product-type.application";
 		};
+
+		467F19BB77FA4C89BAE96E16 /* MoonlightTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 45BB13BBF3CD44889D924006 /* Build configuration list for PBXNativeTarget "MoonlightTests" */;
+			buildPhases = (
+				D22ABDBF649043758CF10EF9 /* Sources */,
+				CA04994B98F94AA89BCCCCF5 /* Frameworks */,
+				7706A489CAE94459B926C550 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MoonlightTests;
+			productName = MoonlightTests;
+			productReference = 7AE9F435BAE0437689FA5AF0 /* MoonlightTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -752,6 +818,11 @@
 					};
 					FB290CED19B2C406004C83CF = {
 						LastSwiftMigration = 1140;
+					};
+					467F19BB77FA4C89BAE96E16 = {
+						CreatedOnToolsVersion = 15.0;
+						ProvisioningStyle = Automatic;
+						TestTargetID = FB290CED19B2C406004C83CF;
 					};
 				};
 			};
@@ -779,6 +850,7 @@
 			targets = (
 				FB290CED19B2C406004C83CF /* Moonlight */,
 				FB1A67522132419700507771 /* Moonlight TV */,
+				467F19BB77FA4C89BAE96E16 /* MoonlightTests */,
 			);
 		};
 /* End PBXProject section */
@@ -821,6 +893,14 @@
 				FB290E7B19B38036004C83CF /* iPhone.storyboard in Resources */,
 				FB290D0919B2C406004C83CF /* Images.xcassets in Resources */,
 				FB89463819F6473800339C8A /* Launch Screen.xib in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+
+		7706A489CAE94459B926C550 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -873,6 +953,9 @@
 				FB1A67AF213245C500507771 /* IdManager.m in Sources */,
 				988FCD42293B091B003050E2 /* KeyboardInputField.m in Sources */,
 				FB1A67A3213245BD00507771 /* Connection.m in Sources */,
+				A1B2C3D4E5F60718293A4B04 /* AbrController.m in Sources */,
+				A1B2C3D4E5F60718293A4B08 /* AnnexBHelpers.m in Sources */,
+				A1B2C3D4E5F60718293A4B14 /* AbrBitrateHelpers.m in Sources */,
 				FB1A67A5213245BD00507771 /* StreamConfiguration.m in Sources */,
 				FB1A67A7213245BD00507771 /* StreamManager.m in Sources */,
 				FB1A67A9213245BD00507771 /* VideoDecoderRenderer.m in Sources */,
@@ -894,6 +977,9 @@
 				FB89463419F646E200339C8A /* Utils.m in Sources */,
 				FBDE86E619F82297001C18A8 /* UIAppView.m in Sources */,
 				FB89462F19F646E200339C8A /* Connection.m in Sources */,
+				A1B2C3D4E5F60718293A4B03 /* AbrController.m in Sources */,
+				A1B2C3D4E5F60718293A4B07 /* AnnexBHelpers.m in Sources */,
+				A1B2C3D4E5F60718293A4B13 /* AbrBitrateHelpers.m in Sources */,
 				FB9AFD321A7D867C00872C98 /* AppAssetRetriever.m in Sources */,
 				FB4678FF1A565DAC00377732 /* WakeOnLanManager.m in Sources */,
 				FB53E1431BE5DC4400CD6ECE /* IdManager.m in Sources */,
@@ -936,6 +1022,19 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+
+		D22ABDBF649043758CF10EF9 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8CE916B7B43F4C1C87CDB6EC /* MoonlightPerfHelpersTests.m in Sources */,
+				A1B2C3D4E5F60718293A4B15 /* AbrBitrateHelpers.m in Sources */,
+				A1B2C3D4E5F60718293A4B16 /* AnnexBHelpers.m in Sources */,
+				A1B2C3D4E5F60718293A4B17 /* Utils.m in Sources */,
+				A1B2C3D4E5F60718293A4B18 /* Logger.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -948,6 +1047,18 @@
 			isa = PBXTargetDependency;
 			name = "moonlight-common-tv";
 			targetProxy = FB1A68162132509800507771 /* PBXContainerItemProxy */;
+		};
+
+		05BE92AC877B4133BE1057B5 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = FB290CED19B2C406004C83CF /* Moonlight */;
+			targetProxy = 31489B1FCA96465ABCDEB39B /* PBXContainerItemProxy */;
+		};
+
+		05BE92AC877B4133BE1057B5 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = FB290CED19B2C406004C83CF /* Moonlight */;
+			targetProxy = 31489B1FCA96465ABCDEB39B /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -1293,6 +1404,63 @@
 			};
 			name = Release;
 		};
+
+		6446058411734D8194E37DFD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(PROJECT_DIR)/Limelight",
+					"$(PROJECT_DIR)/Limelight/Utility",
+					"$(PROJECT_DIR)/Limelight/Stream",
+					"$(PROJECT_DIR)/Limelight/Network",
+					"$(PROJECT_DIR)/Limelight/Database",
+					"$(PROJECT_DIR)/moonlight-common/moonlight-common-c/src",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.moonlight.MoonlightTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		D150C92F25F645EAB8091FC4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(PROJECT_DIR)/Limelight",
+					"$(PROJECT_DIR)/Limelight/Utility",
+					"$(PROJECT_DIR)/Limelight/Stream",
+					"$(PROJECT_DIR)/Limelight/Network",
+					"$(PROJECT_DIR)/Limelight/Database",
+					"$(PROJECT_DIR)/moonlight-common/moonlight-common-c/src",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 12.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.moonlight.MoonlightTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -1319,6 +1487,16 @@
 			buildConfigurations = (
 				FB290D2119B2C406004C83CF /* Debug */,
 				FB290D2219B2C406004C83CF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+
+		45BB13BBF3CD44889D924006 /* Build configuration list for PBXNativeTarget "MoonlightTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6446058411734D8194E37DFD /* Debug */,
+				D150C92F25F645EAB8091FC4 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

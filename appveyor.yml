@@ -21,4 +21,16 @@ build_script:
   - sh: xcodebuild -project Moonlight.xcodeproj -scheme "$SCHEME" -configuration Debug -sdk $SDK clean build
   - sh: xcodebuild -project Moonlight.xcodeproj -scheme "$SCHEME" -configuration Release -sdk $SDK clean build
 
+test_script:
+  - sh: |
+      if [ "$SCHEME" = "Moonlight" ]; then
+        DEST=$(xcodebuild -project Moonlight.xcodeproj -scheme MoonlightTests -showdestinations 2>/dev/null | sed -n 's/.*platform:iOS Simulator,.*id:\([^,]*\).*/id=\1/p' | head -1)
+        if [ -z "$DEST" ]; then
+          DEST='platform=iOS Simulator,name=iPhone 15'
+        else
+          DEST="platform=iOS Simulator,$DEST"
+        fi
+        xcodebuild -project Moonlight.xcodeproj -scheme MoonlightTests -configuration Debug -sdk iphonesimulator -destination "$DEST" test
+      fi
+
 deploy: off

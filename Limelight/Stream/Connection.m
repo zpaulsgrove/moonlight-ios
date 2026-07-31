@@ -45,6 +45,10 @@ static int audioFrameSize;
 
 static VideoDecoderRenderer* renderer;
 
+// Reusable assembly buffer for DrSubmitDecodeUnit picture data
+static unsigned char* decodeAssemblyBuffer = NULL;
+static int decodeAssemblyBufferSize = 0;
+
 int DrDecoderSetup(int videoFormat, int width, int height, int redrawRate, void* context, int drFlags)
 {
     [renderer setupWithVideoFormat:videoFormat width:width height:height frameRate:redrawRate];
@@ -113,11 +117,18 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit)
 {
     int offset = 0;
     int ret;
-    unsigned char* data = (unsigned char*) malloc(decodeUnit->fullLength);
-    if (data == NULL) {
-        // A frame was lost due to OOM condition
-        return DR_NEED_IDR;
+    
+    // Grow a reusable assembly buffer instead of malloc/free per frame
+    if (decodeAssemblyBufferSize < decodeUnit->fullLength) {
+        free(decodeAssemblyBuffer);
+        decodeAssemblyBuffer = (unsigned char*)malloc(decodeUnit->fullLength);
+        if (decodeAssemblyBuffer == NULL) {
+            decodeAssemblyBufferSize = 0;
+            return DR_NEED_IDR;
+        }
+        decodeAssemblyBufferSize = decodeUnit->fullLength;
     }
+    unsigned char* data = decodeAssemblyBuffer;
     
     CFTimeInterval now = CACurrentMediaTime();
     if (!lastFrameNumber) {
@@ -168,7 +179,6 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit)
                                     bufferType:entry->bufferType
                                      decodeUnit:decodeUnit];
             if (ret != DR_OK) {
-                free(data);
                 return ret;
             }
         }
@@ -180,7 +190,8 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit)
         entry = entry->next;
     }
 
-    // This function will take our picture data buffer
+    // Renderer copies picture data into a CMBlockBuffer-owned allocation;
+    // the assembly buffer remains ours for reuse.
     return [renderer submitDecodeBuffer:data
                                  length:offset
                              bufferType:BUFFER_TYPE_PICDATA
@@ -270,15 +281,14 @@ void ArDecodeAndPlaySample(char* sampleData, int sampleLength)
         return;
     }
     
+    // Drop rather than spin if SDL already has plenty queued (avoids SDL_Delay busy-wait)
+    if (SDL_GetQueuedAudioSize(audioDevice) / audioFrameSize > 10) {
+        return;
+    }
+    
     decodeLen = opus_multistream_decode(opusDecoder, (unsigned char *)sampleData, sampleLength,
                                         (short*)audioBuffer, audioConfig.samplesPerFrame, 0);
     if (decodeLen > 0) {
-        // Provide backpressure on the queue to ensure too many frames don't build up
-        // in SDL's audio queue.
-        while (SDL_GetQueuedAudioSize(audioDevice) / audioFrameSize > 10) {
-            SDL_Delay(1);
-        }
-        
         if (SDL_QueueAudio(audioDevice,
                            audioBuffer,
                            sizeof(short) * decodeLen * audioConfig.channelCount) < 0) {
@@ -422,6 +432,32 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
     _streamConfig.bitrate = config.bitRate;
     _streamConfig.supportedVideoFormats = config.supportedVideoFormats;
     _streamConfig.audioConfiguration = config.audioConfiguration;
+    _streamConfig.colorSpace = COLORSPACE_REC_709;
+    _streamConfig.colorRange = COLOR_RANGE_FULL;
+    
+    // Advertise client refresh so Vibepollo/Sunshine can pace to the panel
+    int displayHz = 60;
+    if (@available(iOS 10.3, *)) {
+        displayHz = (int)[UIScreen mainScreen].maximumFramesPerSecond;
+        if (@available(iOS 13.0, *)) {
+            for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+                if (![scene isKindOfClass:[UIWindowScene class]]) {
+                    continue;
+                }
+                UIWindowScene *windowScene = (UIWindowScene *)scene;
+                if (windowScene.activationState == UISceneActivationStateForegroundActive ||
+                    windowScene.activationState == UISceneActivationStateForegroundInactive) {
+                    displayHz = (int)windowScene.screen.maximumFramesPerSecond;
+                    break;
+                }
+            }
+        }
+    }
+    int refreshHz = displayHz;
+    if (config.frameRate > 0 && config.frameRate < refreshHz) {
+        refreshHz = config.frameRate;
+    }
+    _streamConfig.clientRefreshRateX100 = refreshHz * 100;
     
     // Since we require iOS 12 or above, we're guaranteed to be running
     // on a 64-bit device with ARMv8 crypto instructions, so we don't
@@ -432,6 +468,11 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
         // Force remote streaming mode when a VPN is connected
         _streamConfig.streamingRemotely = STREAM_CFG_REMOTE;
         _streamConfig.packetSize = 1024;
+    }
+    else if ([Utils isPrivateAddress:rawAddress]) {
+        // Same-LAN (RFC1918 / mDNS), even when the iPad is on Wi-Fi and the PC is on Ethernet
+        _streamConfig.streamingRemotely = STREAM_CFG_LOCAL;
+        _streamConfig.packetSize = 1392;
     }
     else {
         // Detect remote streaming automatically based on the IP address of the target
@@ -450,7 +491,8 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
     _drCallbacks.stop = DrStop;
     _drCallbacks.capabilities = CAPABILITY_PULL_RENDERER |
                                 CAPABILITY_REFERENCE_FRAME_INVALIDATION_HEVC |
-                                CAPABILITY_REFERENCE_FRAME_INVALIDATION_AV1;
+                                CAPABILITY_REFERENCE_FRAME_INVALIDATION_AV1 |
+                                CAPABILITY_SLICES_PER_FRAME(4);
 
     LiInitializeAudioCallbacks(&_arCallbacks);
     _arCallbacks.init = ArInit;

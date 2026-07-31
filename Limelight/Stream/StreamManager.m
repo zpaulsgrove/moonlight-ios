@@ -10,6 +10,7 @@
 #import "CryptoManager.h"
 #import "HttpManager.h"
 #import "Utils.h"
+#import "AbrController.h"
 
 #import "StreamView.h"
 #import "ServerInfoResponse.h"
@@ -25,6 +26,7 @@
     UIView* _renderView;
     id<ConnectionCallbacks> _callbacks;
     Connection* _connection;
+    AbrController* _abrController;
 }
 
 - (id) initWithConfig:(StreamConfiguration*)config renderView:(UIView*)view connectionCallbacks:(id<ConnectionCallbacks>)callbacks {
@@ -76,9 +78,36 @@
         }
     }
     
+    // Prefer fresh ServerCodecModeSupport from this launch
+    NSString* codecModeSupport = [serverInfoResp getStringTag:@"ServerCodecModeSupport"];
+    if (codecModeSupport != nil) {
+        _config.serverCodecModeSupport = [codecModeSupport intValue];
+    }
+    
     // Populate the config's version fields from serverinfo
     _config.appVersion = appversion;
     _config.gfeVersion = gfeVersion;
+    
+    // Warn clearly when HDR is requested but the host does not advertise Main10
+    // (known Vibepollo / Sunshine advertisement bugs).
+    if ((_config.supportedVideoFormats & VIDEO_FORMAT_MASK_10BIT) &&
+        !(_config.serverCodecModeSupport & SCM_MASK_10BIT)) {
+        Log(LOG_W, @"HDR enabled but host SCM lacks Main10 (0x%x); streaming without 10-bit formats",
+            _config.serverCodecModeSupport);
+        _config.supportedVideoFormats &= ~VIDEO_FORMAT_MASK_10BIT;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            UIAlertController* alert =
+                [UIAlertController alertControllerWithTitle:@"HDR Unavailable"
+                                                    message:@"HDR is enabled in settings, but this host did not advertise HEVC/AV1 Main10 support. Streaming in SDR. Check the host HDR / codec settings if this is unexpected."
+                                             preferredStyle:UIAlertControllerStyleAlert];
+            [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
+            UIViewController* root = UIApplication.sharedApplication.keyWindow.rootViewController;
+            while (root.presentedViewController) {
+                root = root.presentedViewController;
+            }
+            [root presentViewController:alert animated:YES completion:nil];
+        });
+    }
     
     // resumeApp and launchApp handle calling launchFailed
     NSString* sessionUrl;
@@ -101,13 +130,18 @@
     dispatch_async(dispatch_get_main_queue(), ^{
         VideoDecoderRenderer* renderer = [[VideoDecoderRenderer alloc] initWithView:self->_renderView callbacks:self->_callbacks streamAspectRatio:(float)self->_config.width / (float)self->_config.height useFramePacing:self->_config.useFramePacing];
         self->_connection = [[Connection alloc] initWithConfig:self->_config renderer:renderer connectionCallbacks:self->_callbacks];
+        self->_abrController = [[AbrController alloc] initWithConfig:self->_config connection:self->_connection];
         NSOperationQueue* opQueue = [[NSOperationQueue alloc] init];
         [opQueue addOperation:self->_connection];
+        // Start ABR after the connection object exists; it probes the host asynchronously
+        [self->_abrController start];
     });
 }
 
 - (void) stopStream
 {
+    [_abrController stop];
+    _abrController = nil;
     [_connection terminate];
 }
 

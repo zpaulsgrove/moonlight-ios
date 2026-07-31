@@ -64,6 +64,60 @@ NSString *const deviceName = @"roth";
     return NO;
 }
 
++ (BOOL)isPrivateAddress:(NSString*)address {
+    if (address.length == 0) {
+        return NO;
+    }
+    
+    // mDNS / .local hostnames are same-LAN
+    if ([address.lowercaseString hasSuffix:@".local"]) {
+        return YES;
+    }
+    
+    struct in_addr addr4;
+    if (inet_pton(AF_INET, [address UTF8String], &addr4) == 1) {
+        uint32_t hostOrder = ntohl(addr4.s_addr);
+        // 10.0.0.0/8
+        if ((hostOrder & 0xFF000000) == 0x0A000000) {
+            return YES;
+        }
+        // 172.16.0.0/12
+        if ((hostOrder & 0xFFF00000) == 0xAC100000) {
+            return YES;
+        }
+        // 192.168.0.0/16
+        if ((hostOrder & 0xFFFF0000) == 0xC0A80000) {
+            return YES;
+        }
+        // 127.0.0.0/8
+        if ((hostOrder & 0xFF000000) == 0x7F000000) {
+            return YES;
+        }
+        return NO;
+    }
+    
+    struct in6_addr addr6;
+    if (inet_pton(AF_INET6, [address UTF8String], &addr6) == 1) {
+        // Unique local fc00::/7 or link-local fe80::/10
+        if ((addr6.s6_addr[0] & 0xFE) == 0xFC ||
+            (addr6.s6_addr[0] == 0xFE && (addr6.s6_addr[1] & 0xC0) == 0x80)) {
+            return YES;
+        }
+        // Loopback ::1
+        if (IN6_IS_ADDR_LOOPBACK(&addr6)) {
+            return YES;
+        }
+    }
+    
+    return NO;
+}
+
++ (BOOL)isSunshineLineageAppVersion:(NSString*)appVersion {
+    // Sunshine / Apollo / Vibepollo advertise a negative build in the last version quad
+    // (serialized with ".-"), which avoids GFE's FPS>60 launch hacks.
+    return appVersion != nil && [appVersion containsString:@".-"];
+}
+
 #if !TARGET_OS_TV
 + (void) launchUrl:(NSString*)urlString {
     [[UIApplication sharedApplication] openURL:[NSURL URLWithString:urlString] options:@{} completionHandler:nil];

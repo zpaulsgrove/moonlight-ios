@@ -108,8 +108,11 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
                     GCAcceleration emptyAccelSample = {};
                     controller.lastAccelSample = emptyAccelSample;
                     
+                    // Ceiling ~120 Hz to avoid excess wakeups on high-rate host requests
+                    NSTimeInterval interval = 1.0 / MIN(reportRateHz, (uint16_t)120);
+                    
                     dispatch_sync(dispatch_get_main_queue(), ^{
-                        controller.accelTimer = [NSTimer scheduledTimerWithTimeInterval:1.0 / reportRateHz repeats:YES block:^(NSTimer *timer) {
+                        controller.accelTimer = [NSTimer scheduledTimerWithTimeInterval:interval repeats:YES block:^(NSTimer *timer) {
                             // Don't send duplicate samples
                             GCAcceleration lastAccelSample = controller.lastAccelSample;
                             GCAcceleration accelSample = controller.gamepad.motion.acceleration;
@@ -138,8 +141,11 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
                     GCRotationRate emptyGyroSample = {};
                     controller.lastGyroSample = emptyGyroSample;
                     
+                    // Ceiling ~120 Hz to avoid excess wakeups on high-rate host requests
+                    NSTimeInterval interval = 1.0 / MIN(reportRateHz, (uint16_t)120);
+                    
                     dispatch_sync(dispatch_get_main_queue(), ^{
-                        controller.gyroTimer = [NSTimer scheduledTimerWithTimeInterval:1.0 / reportRateHz repeats:YES block:^(NSTimer *timer) {
+                        controller.gyroTimer = [NSTimer scheduledTimerWithTimeInterval:interval repeats:YES block:^(NSTimer *timer) {
                             // Don't send duplicate samples
                             GCRotationRate lastGyroSample = controller.lastGyroSample;
                             GCRotationRate gyroSample = controller.gamepad.motion.rotationRate;

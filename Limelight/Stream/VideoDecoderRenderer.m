@@ -8,6 +8,7 @@
 
 #import "VideoDecoderRenderer.h"
 #import "StreamView.h"
+#import "AnnexBHelpers.h"
 
 #include <libavcodec/avcodec.h>
 #include <libavcodec/cbs.h>
@@ -43,6 +44,10 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
     
     displayLayer = [[AVSampleBufferDisplayLayer alloc] init];
     displayLayer.backgroundColor = [UIColor blackColor].CGColor;
+    displayLayer.opaque = YES;
+    if (@available(iOS 15.0, tvOS 15.0, *)) {
+        displayLayer.preventsDisplaySleepDuringVideoPlayback = YES;
+    }
     
     // Ensure the AVSampleBufferDisplayLayer is sized to preserve the aspect ratio
     // of the video stream. We used to use AVLayerVideoGravityResizeAspect, but that
@@ -108,7 +113,7 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
     else {
         _displayLink.preferredFramesPerSecond = self->frameRate;
     }
-    [_displayLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSDefaultRunLoopMode];
+    [_displayLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
 }
 
 // TODO: Refactor this
@@ -401,7 +406,8 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     return formatDesc;
 }
 
-// This function must free data for bufferType == BUFFER_TYPE_PICDATA
+// Picture data may be backed by a reusable assembly buffer; we copy into
+// a CMBlockBuffer-owned allocation and never free the caller's pointer.
 - (int)submitDecodeBuffer:(unsigned char *)data length:(int)length bufferType:(int)bufferType decodeUnit:(PDECODE_UNIT)du
 {
     OSStatus status;
@@ -511,7 +517,6 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     
     if (formatDesc == NULL) {
         // Can't decode if we haven't gotten our parameter sets yet
-        free(data);
         return DR_NEED_IDR;
     }
     
@@ -524,7 +529,6 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
         [self reinitializeDisplayLayer];
         
         // Request an IDR frame to initialize the new decoder
-        free(data);
         return DR_NEED_IDR;
     }
     
@@ -532,14 +536,33 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     CMBlockBufferRef frameBlockBuffer;
     CMBlockBufferRef dataBlockBuffer;
     
-    status = CMBlockBufferCreateWithMemoryBlock(NULL, data, length, kCFAllocatorDefault, NULL, 0, length, 0, &dataBlockBuffer);
+    // Allocate CMBlockBuffer-owned memory and copy so the caller's reusable buffer stays valid
+    status = CMBlockBufferCreateWithMemoryBlock(NULL, NULL, length, kCFAllocatorDefault, NULL, 0, length, kCMBlockBufferAssureMemoryNowFlag, &dataBlockBuffer);
     if (status != noErr) {
         Log(LOG_E, @"CMBlockBufferCreateWithMemoryBlock failed: %d", (int)status);
-        free(data);
         return DR_NEED_IDR;
     }
     
-    // From now on, CMBlockBuffer owns the data pointer and will free it when it's dereferenced
+    status = CMBlockBufferReplaceDataBytes(data, dataBlockBuffer, 0, length);
+    if (status != noErr) {
+        Log(LOG_E, @"CMBlockBufferReplaceDataBytes failed: %d", (int)status);
+        CFRelease(dataBlockBuffer);
+        return DR_NEED_IDR;
+    }
+    
+    // Annex-B rewrite below mutates NAL length prefixes in place via updateAnnexBBufferForRange
+    // which writes into frameBlockBuffer, not dataBlockBuffer's media bytes for the prefix.
+    // We still need a mutable view of the copied data for start-code scanning.
+    size_t dataOffsetAt = 0;
+    size_t dataLengthAt = 0;
+    char* dataPointer = NULL;
+    status = CMBlockBufferGetDataPointer(dataBlockBuffer, 0, &dataOffsetAt, &dataLengthAt, &dataPointer);
+    if (status != noErr || dataPointer == NULL) {
+        Log(LOG_E, @"CMBlockBufferGetDataPointer failed: %d", (int)status);
+        CFRelease(dataBlockBuffer);
+        return DR_NEED_IDR;
+    }
+    unsigned char* scanData = (unsigned char*)dataPointer;
     
     status = CMBlockBufferCreateEmpty(NULL, 0, 0, &frameBlockBuffer);
     if (status != noErr) {
@@ -550,23 +573,12 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     
     // H.264 and HEVC formats require NAL prefix fixups from Annex B to length-delimited
     if (videoFormat & (VIDEO_FORMAT_MASK_H264 | VIDEO_FORMAT_MASK_H265)) {
-        int lastOffset = -1;
-        for (int i = 0; i < length - NALU_START_PREFIX_SIZE; i++) {
-            // Search for a NALU
-            if (data[i] == 0 && data[i+1] == 0 && data[i+2] == 1) {
-                // It's the start of a new NALU
-                if (lastOffset != -1) {
-                    // We've seen a start before this so enqueue that NALU
-                    [self updateAnnexBBufferForRange:frameBlockBuffer dataBlock:dataBlockBuffer offset:lastOffset length:i - lastOffset];
-                }
-                
-                lastOffset = i;
-            }
-        }
-        
-        if (lastOffset != -1) {
-            // Enqueue the remaining data
-            [self updateAnnexBBufferForRange:frameBlockBuffer dataBlock:dataBlockBuffer offset:lastOffset length:length - lastOffset];
+        int offsets[256];
+        int naluCount = MLFindAnnexBStartOffsets(scanData, length, offsets, 256);
+        for (int n = 0; n < naluCount; n++) {
+            int start = offsets[n];
+            int end = (n + 1 < naluCount) ? offsets[n + 1] : length;
+            [self updateAnnexBBufferForRange:frameBlockBuffer dataBlock:dataBlockBuffer offset:start length:end - start];
         }
     }
     else {
@@ -574,6 +586,8 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
         status = CMBlockBufferAppendBufferReference(frameBlockBuffer, dataBlockBuffer, 0, length, 0);
         if (status != noErr) {
             Log(LOG_E, @"CMBlockBufferAppendBufferReference failed: %d", (int)status);
+            CFRelease(dataBlockBuffer);
+            CFRelease(frameBlockBuffer);
             return DR_NEED_IDR;
         }
     }
@@ -615,9 +629,31 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
 
 - (void)setHdrMode:(BOOL)enabled {
     SS_HDR_METADATA hdrMetadata;
+    memset(&hdrMetadata, 0, sizeof(hdrMetadata));
     
     BOOL hasMetadata = enabled && LiGetHdrMetadata(&hdrMetadata);
     BOOL metadataChanged = NO;
+    
+    // Fall back to Rec.2020 / D65 / XDR-class luminance when the host sends empty metadata
+    if (enabled && (!hasMetadata || hdrMetadata.displayPrimaries[0].x == 0 || hdrMetadata.maxDisplayLuminance == 0)) {
+        // Rec.2020 primaries in 0.00002 units, D65 white point
+        hdrMetadata.displayPrimaries[0].x = 35400; // R
+        hdrMetadata.displayPrimaries[0].y = 14600;
+        hdrMetadata.displayPrimaries[1].x = 8500;  // G
+        hdrMetadata.displayPrimaries[1].y = 39850;
+        hdrMetadata.displayPrimaries[2].x = 6550;  // B
+        hdrMetadata.displayPrimaries[2].y = 2300;
+        hdrMetadata.whitePoint.x = 15635;
+        hdrMetadata.whitePoint.y = 16450;
+        hdrMetadata.maxDisplayLuminance = 1000;
+        hdrMetadata.minDisplayLuminance = 1; // 0.0001 nits units → keep minimal non-zero
+        hasMetadata = YES;
+    }
+    
+    if (enabled && hasMetadata && (hdrMetadata.maxContentLightLevel == 0 || hdrMetadata.maxFrameAverageLightLevel == 0)) {
+        hdrMetadata.maxContentLightLevel = 1600;
+        hdrMetadata.maxFrameAverageLightLevel = 400;
+    }
     
     if (hasMetadata && hdrMetadata.displayPrimaries[0].x != 0 && hdrMetadata.maxDisplayLuminance != 0) {
         // This data is all in big-endian
