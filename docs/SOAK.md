@@ -40,7 +40,9 @@ Bitrate: start ~40-75 Mbps for 1440p@90/120 on Wi-Fi; slider headroom to ~150 on
 ## Latency pass notes (this soak)
 
 - Late-frame drop + age gate should keep the newest frame under jitter without long backlog
+- **IDRs are never skip-decoded or soft-dropped as `DR_OK`** (would falsely mark `idrFrameProcessed`); saturated ASBDL on IDR requests refresh instead
 - Private LAN + Wi-Fi client uses `STREAM_CFG_LOCAL` with **packetSize 1024**
+- Wi-Fi probe runs once per stream start (cached); timeout defaults to Wi-Fi-safe settings
 - Single CMBlockBuffer Annex-B rewrite (in-place 4-byte / compact 3-byte); watch for decoder errors
 
 ## Out of scope for this soak

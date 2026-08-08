@@ -63,6 +63,11 @@ int MLRewriteAnnexBToLengthPrefixed(uint8_t *data, int length,
         return -1;
     }
     
+    // In-place compact/rewrite assumes the first start code is at byte 0.
+    if (offsets[0] != 0) {
+        return -1;
+    }
+    
     BOOL allFour = YES;
     int threeCount = 0;
     for (int i = 0; i < count; i++) {

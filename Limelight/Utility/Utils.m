@@ -9,6 +9,7 @@
 #import "Utils.h"
 
 #import <Network/Network.h>
+#import <QuartzCore/QuartzCore.h>
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -17,6 +18,11 @@
 
 @implementation Utils
 NSString *const deviceName = @"roth";
+
+static BOOL s_wifiCacheValid = NO;
+static BOOL s_wifiCacheValue = YES;
+static CFTimeInterval s_wifiCacheAt = 0;
+static const CFTimeInterval kWiFiCacheTTLSeconds = 5.0;
 
 + (NSData*) randomBytes:(NSInteger)length {
     char* bytes = malloc(length);
@@ -68,19 +74,35 @@ NSString *const deviceName = @"roth";
 }
 
 + (BOOL)isActiveNetworkWiFi {
-    __block BOOL usesWiFi = NO;
+    CFTimeInterval now = CACurrentMediaTime();
+    if (s_wifiCacheValid && (now - s_wifiCacheAt) < kWiFiCacheTTLSeconds) {
+        return s_wifiCacheValue;
+    }
+    
+    // Default YES on timeout: iPad clients are almost always Wi-Fi; false negatives
+    // would pick oversized packets and skip the ABR ramp.
+    __block int wifiResult = -1; // -1 unknown, 0 no, 1 yes
     dispatch_semaphore_t sem = dispatch_semaphore_create(0);
     nw_path_monitor_t monitor = nw_path_monitor_create();
     nw_path_monitor_set_queue(monitor, dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0));
     nw_path_monitor_set_update_handler(monitor, ^(nw_path_t path) {
-        usesWiFi = nw_path_uses_interface_type(path, nw_interface_type_wifi);
+        wifiResult = nw_path_uses_interface_type(path, nw_interface_type_wifi) ? 1 : 0;
         dispatch_semaphore_signal(sem);
     });
     nw_path_monitor_start(monitor);
     // Bound wait so stream setup cannot hang if the path callback is delayed
     dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(200 * NSEC_PER_MSEC)));
     nw_path_monitor_cancel(monitor);
+    
+    BOOL usesWiFi = (wifiResult < 0) ? YES : (wifiResult == 1);
+    s_wifiCacheValue = usesWiFi;
+    s_wifiCacheValid = YES;
+    s_wifiCacheAt = CACurrentMediaTime();
     return usesWiFi;
+}
+
++ (void)invalidateActiveNetworkWiFiCache {
+    s_wifiCacheValid = NO;
 }
 
 + (void)streamRemoteMode:(int*)streamingRemotely

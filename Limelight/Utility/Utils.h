@@ -28,6 +28,8 @@ FOUNDATION_EXPORT NSString *const deviceName;
 + (void) addHelpOptionToDialog:(UIAlertController*)dialog;
 + (BOOL)isActiveNetworkVPN;
 + (BOOL)isActiveNetworkWiFi;
+// Drop any cached Wi-Fi probe so the next isActiveNetworkWiFi call re-probes once.
++ (void)invalidateActiveNetworkWiFiCache;
 + (BOOL)isPrivateAddress:(NSString*)address;
 
 // Pure path helper for stream packet sizing (testable without live Network probes).

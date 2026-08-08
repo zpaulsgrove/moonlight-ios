@@ -134,6 +134,29 @@
     XCTAssertEqual(buf[10], 0xCC);
 }
 
+- (void)testAnnexBRewriteRejectsLeadingBytes {
+    uint8_t buf[16] = {
+        0xFF, 0x00, 0x00, 0x01, 0xAA, 0xBB
+    };
+    int outLength = 0;
+    XCTAssertEqual(MLRewriteAnnexBToLengthPrefixed(buf, 6, 16, &outLength), -1);
+}
+
+- (void)testAnnexBRewriteMixedThreeAndFourByte {
+    uint8_t buf[24] = {
+        0x00, 0x00, 0x00, 0x01, 0xAA, 0xBB,
+        0x00, 0x00, 0x01, 0xCC
+    };
+    int outLength = 0;
+    XCTAssertEqual(MLRewriteAnnexBToLengthPrefixed(buf, 10, 24, &outLength), 0);
+    XCTAssertEqual(outLength, 11); // one extra byte for the 3-byte start code
+    XCTAssertEqual(buf[3], 0x02);
+    XCTAssertEqual(buf[4], 0xAA);
+    XCTAssertEqual(buf[5], 0xBB);
+    XCTAssertEqual(buf[9], 0x01);
+    XCTAssertEqual(buf[10], 0xCC);
+}
+
 - (void)testStreamPacketSizePathHelper {
     int remote = 0;
     int packet = 0;

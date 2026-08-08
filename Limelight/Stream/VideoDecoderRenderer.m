@@ -40,6 +40,7 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
     BOOL framePacing;
     uint64_t _lastUnderrunMs;
     BOOL _submittedLastCallback;
+    BOOL _enqueuedLastSubmit;
 }
 
 - (void)reinitializeDisplayLayer
@@ -96,6 +97,7 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
     framePacing = useFramePacing;
     _lastUnderrunMs = 0;
     _submittedLastCallback = NO;
+    _enqueuedLastSubmit = NO;
     
     parameterSetBuffers = [[NSMutableArray alloc] init];
     
@@ -133,13 +135,19 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     int submitted = 0;
     uint64_t nowMs = LiGetMillis();
     uint64_t maxAgeMs = (frameRate > 0) ? (1500 / (uint64_t)frameRate) : 25;
+    BOOL recentUnderrun = (_lastUnderrunMs != 0 && (nowMs - _lastUnderrunMs) <= 250);
     
     while (LiPollNextVideoFrame(&handle, &du)) {
         polled++;
         
+        // Never skip-decode IDRs: LiCompleteVideoFrame(DR_OK) would mark idrFrameProcessed
+        // without a real decode and leave later P-frames without a keyframe.
+        BOOL isIdr = (du->frameType == FRAME_TYPE_IDR);
+        
         // Prefer the newest frame: if more remain queued, skip-decode this older one.
-        BOOL drop = LiGetPendingVideoFrames() >= 1;
-        if (!drop && nowMs > du->enqueueTimeMs &&
+        BOOL drop = !isIdr && LiGetPendingVideoFrames() >= 1;
+        // Skip age-drop while holding after an underrun so the paced frame is not discarded.
+        if (!drop && !isIdr && !recentUnderrun && nowMs > du->enqueueTimeMs &&
             (nowMs - du->enqueueTimeMs) > maxAgeMs) {
             drop = YES;
         }
@@ -148,8 +156,13 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
             LiCompleteVideoFrame(handle, DR_OK);
         }
         else {
-            LiCompleteVideoFrame(handle, DrSubmitDecodeUnit(du));
-            submitted++;
+            _enqueuedLastSubmit = NO;
+            int status = DrSubmitDecodeUnit(du);
+            LiCompleteVideoFrame(handle, status);
+            // Only count frames that actually reached ASBDL (soft-drops return DR_OK too).
+            if (_enqueuedLastSubmit) {
+                submitted++;
+            }
         }
         
         if (framePacing) {
@@ -162,7 +175,6 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
             if (displayRefreshRate >= frameRate * 0.9f) {
                 // Hold one pending frame only shortly after an underrun to smooth jitter;
                 // otherwise drain to zero pending for lowest latency on clean Wi-Fi.
-                BOOL recentUnderrun = (_lastUnderrunMs != 0 && (nowMs - _lastUnderrunMs) <= 250);
                 if (recentUnderrun && LiGetPendingVideoFrames() == 1) {
                     break;
                 }
@@ -406,6 +418,7 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
 - (int)submitDecodeBuffer:(unsigned char *)data length:(int)length bufferType:(int)bufferType decodeUnit:(PDECODE_UNIT)du
 {
     OSStatus status;
+    _enqueuedLastSubmit = NO;
     
     // Parameter sets are submitted individually before picture data
     if (bufferType != BUFFER_TYPE_PICDATA) {
@@ -416,6 +429,15 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
             }
         }
         // Data is NOT to be freed here. It's a direct usage of the caller's buffer.
+        return DR_OK;
+    }
+    
+    // Soft-drop before gather/rewrite when ASBDL is saturated. IDRs must not return DR_OK
+    // without enqueue (that falsely sets idrFrameProcessed); request a fresh keyframe instead.
+    if (![self->displayLayer isReadyForMoreMediaData]) {
+        if (du->frameType == FRAME_TYPE_IDR) {
+            return DR_NEED_IDR;
+        }
         return DR_OK;
     }
     
@@ -598,16 +620,20 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
         return DR_NEED_IDR;
     }
 
-    // Avoid forcing samples into a saturated layer (leads to Failed + IDR recovery).
+    // Re-check after sample construction; IDR must not soft-complete as DR_OK.
     if (![self->displayLayer isReadyForMoreMediaData]) {
         CFRelease(dataBlockBuffer);
         CFRelease(frameBlockBuffer);
         CFRelease(sampleBuffer);
+        if (du->frameType == FRAME_TYPE_IDR) {
+            return DR_NEED_IDR;
+        }
         return DR_OK;
     }
 
     // Enqueue the next frame
     [self->displayLayer enqueueSampleBuffer:sampleBuffer];
+    _enqueuedLastSubmit = YES;
     
     if (du->frameType == FRAME_TYPE_IDR) {
         // Ensure the layer is visible now
