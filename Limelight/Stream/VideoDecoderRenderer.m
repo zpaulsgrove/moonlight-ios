@@ -217,13 +217,14 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     while (!atomic_load(&_stopping)) {
         BOOL haveFrame = LiWaitForNextVideoFrame(&handle, &du);
         
-        [self applyPendingHdrUpdate];
-        
         if (!haveFrame) {
-            // The wait only fails on shutdown or on our own LiWakeWaitForVideoFrame
+            // The wait only fails on shutdown or on our own LiWakeWaitForVideoFrame.
+            // Do not applyPendingHdrUpdate here: LiWake races with a pending HDR snapshot and
+            // apply would LiRequestIdrFrame on a connection that is already stopping.
             break;
         }
         
+        [self applyPendingHdrUpdate];
         [self submitFrame:handle decodeUnit:du];
     }
     
@@ -886,6 +887,10 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
 
 // Runs on the submission thread, which owns masteringDisplayColorVolume and contentLightLevelInfo.
 - (void)applyPendingHdrUpdate {
+    if (atomic_load(&_stopping)) {
+        return;
+    }
+    
     BOOL enabled;
     BOOL hasMetadata;
     SS_HDR_METADATA hdrMetadata;
@@ -937,8 +942,9 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
         metadataChanged = YES;
     }
     
-    // If the metadata changed, request an IDR frame to re-create the CMVideoFormatDescription
-    if (metadataChanged) {
+    // If the metadata changed, request an IDR frame to re-create the CMVideoFormatDescription.
+    // Re-check stop so a snapshot that landed during teardown cannot still request an IDR.
+    if (metadataChanged && !atomic_load(&_stopping)) {
         LiRequestIdrFrame();
     }
 }

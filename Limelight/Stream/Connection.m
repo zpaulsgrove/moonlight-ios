@@ -338,15 +338,18 @@ void ClConnectionStatusUpdate(int status)
 
 void ClSetHdrMode(bool enabled)
 {
-    // Snapshot the metadata here, on the control thread that just published it. Reading it
-    // later from the render thread would invert the dependency and could install mastering
-    // metadata for a stream that has already reverted to SDR.
+    // Ignore the callback's enabled flag. It was read in a separate LiGetCurrentHostDisplayHdrMode
+    // call before this entry point; taking enabled and metadata from two locked reads allows
+    // enabled=true with a later SDR snapshot (or the reverse). LiGetHdrMetadata already returns
+    // hdrEnabled and copies metadata under one lock.
+    (void)enabled;
+    
     SS_HDR_METADATA hdrMetadata;
     memset(&hdrMetadata, 0, sizeof(hdrMetadata));
-    bool hasMetadata = enabled && LiGetHdrMetadata(&hdrMetadata);
+    bool hdrOn = LiGetHdrMetadata(&hdrMetadata);
     
-    [renderer setHdrMode:enabled metadata:hasMetadata ? &hdrMetadata : NULL];
-    [_callbacks setHdrMode:enabled];
+    [renderer setHdrMode:hdrOn metadata:hdrOn ? &hdrMetadata : NULL];
+    [_callbacks setHdrMode:hdrOn];
 }
 
 void ClRumbleTriggers(uint16_t controllerNumber, uint16_t leftTriggerMotor, uint16_t rightTriggerMotor)
