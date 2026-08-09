@@ -1,0 +1,26 @@
+---
+description: Keep all git check-ins local; never push or publish upstream
+alwaysApply: true
+---
+
+# Local Git Only
+
+All agent git work stays on the local machine and the current local branch.
+
+## Required
+
+- Commit only to the local repository and the current local branch when the user asks to check in or commit.
+- Prefer `git commit` (and local staging) over any remote publish step.
+
+## Forbidden unless the user explicitly requests it in the same message
+
+- `git push` (any form, including `-u`, tags, or force)
+- Opening or updating pull requests (`gh pr create`, `gh pr edit`, etc.)
+- Publishing releases, tags to remote, or otherwise sending commits upstream
+- Setting or changing an upstream tracking branch as part of publishing
+
+## Clarifications
+
+- Local commits are allowed when requested. Remote publication is not.
+- If a workflow would normally push or open a PR after committing, stop after the local commit and tell the user the work is only on the local branch.
+- If the user asks only to "check in" or "commit", treat that as local-only.
