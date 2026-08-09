@@ -66,6 +66,12 @@ static os_log_t VideoRendererSignpostLog(void)
     CADisplayLink* _displayLink;
     BOOL framePacing;
     
+    // Arrival-path soft-drop skips P-frames without decoding them. Until an IDR is enqueued,
+    // later P-frames would paint as corruption, so we refuse them and request one IDR for the
+    // whole streak rather than one per skipped frame.
+    BOOL _arrivalDecodeChainBroken;
+    BOOL _arrivalIdrRequestedForSoftDrop;
+    
     NSThread* _renderThread;
     dispatch_semaphore_t _renderThreadExited;
     atomic_bool _stopping;
@@ -188,6 +194,9 @@ static os_log_t VideoRendererSignpostLog(void)
 
 - (void)start
 {
+    _arrivalDecodeChainBroken = NO;
+    _arrivalIdrRequestedForSoftDrop = NO;
+    
     if (framePacing) {
         _displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(displayLinkCallback:)];
         _displayLink.preferredFrameRateRange = CAFrameRateRangeMake(self->frameRate, self->frameRate, self->frameRate);
@@ -278,21 +287,42 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     BOOL isIdr = (du->frameType == FRAME_TYPE_IDR);
     
     // Prefer the newest frame only on the arrival-driven path. Soft-completing a skipped
-    // P-frame as DR_OK never feeds it to the decoder, so the next predicted frame references
-    // missing state and paints as blocky corruption until an IDR. Frame pacing intentionally
-    // drains at display rate and must preserve decode order; drop-to-newest there turns a
-    // backlog into visible pixelation (exactly what Smoothest Video was hitting).
+    // P-frame never feeds it to the decoder, so reference chains break until an IDR. After the
+    // first skip we request one IDR for the streak and refuse later P-frames until that
+    // keyframe is enqueued. Frame pacing drains in order and never soft-drops.
     int pendingFrames = LiGetPendingVideoFrames();
-    BOOL drop = !framePacing && !isIdr && pendingFrames >= 1;
+    BOOL dropForNewest = !framePacing && !isIdr && pendingFrames >= 1;
+    BOOL dropBrokenChain = !framePacing && !isIdr && _arrivalDecodeChainBroken;
+    BOOL drop = dropForNewest || dropBrokenChain;
     
     DrNoteClientQueueAgeMs(frameAgeMs);
     
     os_signpost_interval_begin(VideoRendererSignpostLog(), signpostId, "SubmitFrame",
                                "frameAgeMs=%llu pending=%d", frameAgeMs, pendingFrames);
     
-    MLEnqueueResult result = drop ? MLEnqueueResultDropped : DrSubmitDecodeUnit(du);
+    MLEnqueueResult result;
+    int drStatus;
     
-    int drStatus = (result == MLEnqueueResultNeedsIdr) ? DR_NEED_IDR : DR_OK;
+    if (drop) {
+        result = MLEnqueueResultDropped;
+        if (!_arrivalIdrRequestedForSoftDrop) {
+            _arrivalDecodeChainBroken = YES;
+            _arrivalIdrRequestedForSoftDrop = YES;
+            drStatus = DR_NEED_IDR;
+        }
+        else {
+            drStatus = DR_OK;
+        }
+    }
+    else {
+        result = DrSubmitDecodeUnit(du);
+        drStatus = (result == MLEnqueueResultNeedsIdr) ? DR_NEED_IDR : DR_OK;
+        if (isIdr && result == MLEnqueueResultEnqueued) {
+            _arrivalDecodeChainBroken = NO;
+            _arrivalIdrRequestedForSoftDrop = NO;
+        }
+    }
+    
     if (atomic_load(&_stopping)) {
         // DR_NEED_IDR flushes the queue and requests a keyframe on a connection that is
         // already being torn down, so in-flight frames always complete cleanly after the latch.
