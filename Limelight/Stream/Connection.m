@@ -109,9 +109,9 @@ void DrStop(void)
     }
 }
 
-int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit)
+MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit)
 {
-    int ret;
+    MLEnqueueResult ret;
     
     CFTimeInterval now = CACurrentMediaTime();
     if (!lastFrameNumber) {
@@ -161,7 +161,7 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit)
                                         length:entry->length
                                     bufferType:entry->bufferType
                                      decodeUnit:decodeUnit];
-            if (ret != DR_OK) {
+            if (ret == MLEnqueueResultNeedsIdr) {
                 return ret;
             }
         }
@@ -319,7 +319,14 @@ void ClConnectionStatusUpdate(int status)
 
 void ClSetHdrMode(bool enabled)
 {
-    [renderer setHdrMode:enabled];
+    // Snapshot the metadata here, on the control thread that just published it. Reading it
+    // later from the render thread would invert the dependency and could install mastering
+    // metadata for a stream that has already reverted to SDR.
+    SS_HDR_METADATA hdrMetadata;
+    memset(&hdrMetadata, 0, sizeof(hdrMetadata));
+    bool hasMetadata = enabled && LiGetHdrMetadata(&hdrMetadata);
+    
+    [renderer setHdrMode:enabled metadata:hasMetadata ? &hdrMetadata : NULL];
     [_callbacks setHdrMode:enabled];
 }
 
@@ -436,7 +443,7 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
     }
     _streamConfig.clientRefreshRateX100 = refreshHz * 100;
     
-    // Since we require iOS 12 or above, we're guaranteed to be running
+    // Since we require iOS 17 or above, we're guaranteed to be running
     // on a 64-bit device with ARMv8 crypto instructions, so we don't
     // need to check for that here.
     _streamConfig.encryptionFlags = ENCFLG_ALL;

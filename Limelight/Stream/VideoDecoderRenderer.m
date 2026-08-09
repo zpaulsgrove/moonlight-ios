@@ -9,8 +9,14 @@
 #import "VideoDecoderRenderer.h"
 #import "StreamView.h"
 #import "AnnexBHelpers.h"
+#import "HdrMetadataHelpers.h"
 
+#include <stdatomic.h>
 #include <string.h>
+
+#include <os/lock.h>
+#include <os/log.h>
+#include <os/signpost.h>
 
 #include <libavcodec/avcodec.h>
 #include <libavcodec/cbs.h>
@@ -22,37 +28,63 @@
 extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
                               int write_seq_header);
 
+static os_log_t VideoRendererSignpostLog(void)
+{
+    static os_log_t log;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        log = os_log_create("com.moonlight-stream.Moonlight", "renderer");
+    });
+    return log;
+}
+
 @implementation VideoDecoderRenderer {
     StreamView* _view;
     id<ConnectionCallbacks> _callbacks;
     float _streamAspectRatio;
     
+    // The layer and its renderer are created and replaced on the main thread only. The
+    // submission thread reads them through _layerLock and carries the generation it saw, so
+    // it can never enqueue into a renderer that main has already thrown away.
+    os_unfair_lock _layerLock;
     AVSampleBufferDisplayLayer* displayLayer;
+    AVSampleBufferVideoRenderer* videoRenderer;
+    uint64_t _layerGeneration;
+    
     int videoFormat;
     int frameRate;
     
+    // Decode state below belongs exclusively to whichever thread drives submission.
     NSMutableArray *parameterSetBuffers;
     NSData *masteringDisplayColorVolume;
     NSData *contentLightLevelInfo;
     CMVideoFormatDescriptionRef formatDesc;
+    uint64_t _shownGeneration;
     
     CADisplayLink* _displayLink;
     BOOL framePacing;
-    uint64_t _lastUnderrunMs;
-    BOOL _submittedLastCallback;
-    BOOL _enqueuedLastSubmit;
+    
+    NSThread* _renderThread;
+    dispatch_semaphore_t _renderThreadExited;
+    atomic_bool _stopping;
+    BOOL _stopped;
+    
+    // HDR snapshot handed over from the control callback thread. Only the newest pending
+    // snapshot survives, so a burst of host toggles cannot produce a burst of IDR requests.
+    os_unfair_lock _hdrLock;
+    BOOL _pendingHdrValid;
+    BOOL _pendingHdrEnabled;
+    BOOL _pendingHdrHasMetadata;
+    SS_HDR_METADATA _pendingHdrMetadata;
 }
 
-- (void)reinitializeDisplayLayer
+// Main-thread-only layer surgery. Decode state is deliberately not touched here.
+- (void)createDisplayLayer
 {
-    CALayer *oldLayer = displayLayer;
-    
-    displayLayer = [[AVSampleBufferDisplayLayer alloc] init];
-    displayLayer.backgroundColor = [UIColor blackColor].CGColor;
-    displayLayer.opaque = YES;
-    if (@available(iOS 15.0, tvOS 15.0, *)) {
-        displayLayer.preventsDisplaySleepDuringVideoPlayback = YES;
-    }
+    AVSampleBufferDisplayLayer* newLayer = [[AVSampleBufferDisplayLayer alloc] init];
+    newLayer.backgroundColor = [UIColor blackColor].CGColor;
+    newLayer.opaque = YES;
+    newLayer.preventsDisplaySleepDuringVideoPlayback = YES;
     
     // Ensure the AVSampleBufferDisplayLayer is sized to preserve the aspect ratio
     // of the video stream. We used to use AVLayerVideoGravityResizeAspect, but that
@@ -65,26 +97,65 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
     } else {
         videoSize = CGSizeMake(_view.bounds.size.width, _view.bounds.size.width / _streamAspectRatio);
     }
-    displayLayer.position = CGPointMake(CGRectGetMidX(_view.bounds), CGRectGetMidY(_view.bounds));
-    displayLayer.bounds = CGRectMake(0, 0, videoSize.width, videoSize.height);
-    displayLayer.videoGravity = AVLayerVideoGravityResize;
+    newLayer.position = CGPointMake(CGRectGetMidX(_view.bounds), CGRectGetMidY(_view.bounds));
+    newLayer.bounds = CGRectMake(0, 0, videoSize.width, videoSize.height);
+    newLayer.videoGravity = AVLayerVideoGravityResize;
 
     // Hide the layer until we get an IDR frame. This ensures we
     // can see the loading progress label as the stream is starting.
-    displayLayer.hidden = YES;
+    newLayer.hidden = YES;
+    
+    os_unfair_lock_lock(&_layerLock);
+    AVSampleBufferDisplayLayer* oldLayer = displayLayer;
+    displayLayer = newLayer;
+    videoRenderer = newLayer.sampleBufferRenderer;
+    _layerGeneration++;
+    os_unfair_lock_unlock(&_layerLock);
     
     if (oldLayer != nil) {
         // Switch out the old display layer with the new one
-        [_view.layer replaceSublayer:oldLayer with:displayLayer];
+        [_view.layer replaceSublayer:oldLayer with:newLayer];
     }
     else {
-        [_view.layer addSublayer:displayLayer];
+        [_view.layer addSublayer:newLayer];
     }
-    
-    if (formatDesc != nil) {
+}
+
+// Submission-thread-only counterpart to createDisplayLayer.
+- (void)resetDecodeState
+{
+    if (formatDesc != NULL) {
         CFRelease(formatDesc);
-        formatDesc = nil;
+        formatDesc = NULL;
     }
+    [parameterSetBuffers removeAllObjects];
+}
+
+- (AVSampleBufferVideoRenderer*)currentVideoRenderer:(uint64_t*)outGeneration
+{
+    os_unfair_lock_lock(&_layerLock);
+    AVSampleBufferVideoRenderer* current = videoRenderer;
+    if (outGeneration != NULL) {
+        *outGeneration = _layerGeneration;
+    }
+    os_unfair_lock_unlock(&_layerLock);
+    return current;
+}
+
+- (AVSampleBufferDisplayLayer*)currentDisplayLayer
+{
+    os_unfair_lock_lock(&_layerLock);
+    AVSampleBufferDisplayLayer* current = displayLayer;
+    os_unfair_lock_unlock(&_layerLock);
+    return current;
+}
+
+- (uint64_t)currentLayerGeneration
+{
+    os_unfair_lock_lock(&_layerLock);
+    uint64_t generation = _layerGeneration;
+    os_unfair_lock_unlock(&_layerLock);
+    return generation;
 }
 
 - (id)initWithView:(StreamView*)view callbacks:(id<ConnectionCallbacks>)callbacks streamAspectRatio:(float)aspectRatio useFramePacing:(BOOL)useFramePacing
@@ -95,13 +166,14 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
     _callbacks = callbacks;
     _streamAspectRatio = aspectRatio;
     framePacing = useFramePacing;
-    _lastUnderrunMs = 0;
-    _submittedLastCallback = NO;
-    _enqueuedLastSubmit = NO;
+    _layerLock = OS_UNFAIR_LOCK_INIT;
+    _hdrLock = OS_UNFAIR_LOCK_INIT;
+    _renderThreadExited = dispatch_semaphore_create(0);
+    atomic_init(&_stopping, false);
     
     parameterSetBuffers = [[NSMutableArray alloc] init];
     
-    [self reinitializeDisplayLayer];
+    [self createDisplayLayer];
     
     return self;
 }
@@ -114,83 +186,145 @@ extern int ff_isom_write_av1c(AVIOContext *pb, const uint8_t *buf, int size,
 
 - (void)start
 {
-    _displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(displayLinkCallback:)];
-    if (@available(iOS 15.0, tvOS 15.0, *)) {
+    if (framePacing) {
+        _displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(displayLinkCallback:)];
         _displayLink.preferredFrameRateRange = CAFrameRateRangeMake(self->frameRate, self->frameRate, self->frameRate);
+        [_displayLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
     }
     else {
-        _displayLink.preferredFramesPerSecond = self->frameRate;
+        // A real thread rather than a dispatch queue: the loop blocks in
+        // LiWaitForNextVideoFrame and would otherwise occupy a cooperative pool thread.
+        _renderThread = [[NSThread alloc] initWithTarget:self selector:@selector(renderThreadMain) object:nil];
+        _renderThread.name = @"Moonlight video render";
+        _renderThread.qualityOfService = NSQualityOfServiceUserInteractive;
+        [_renderThread start];
     }
-    [_displayLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
 }
 
 // TODO: Refactor this
-int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
+MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
 
-- (void)displayLinkCallback:(CADisplayLink *)sender
+// The wait, the drop decision, the enqueue, and LiCompleteVideoFrame all have to run on one
+// thread: the depacketizer asserts an idrFrameProcessed ordering that a split would break, and
+// completion is what frees the decode unit. Do not move completion elsewhere.
+- (void)renderThreadMain
 {
     VIDEO_FRAME_HANDLE handle;
     PDECODE_UNIT du;
-    int polled = 0;
-    int submitted = 0;
-    uint64_t nowMs = LiGetMillis();
-    uint64_t maxAgeMs = (frameRate > 0) ? (1500 / (uint64_t)frameRate) : 25;
-    BOOL recentUnderrun = (_lastUnderrunMs != 0 && (nowMs - _lastUnderrunMs) <= 250);
     
+    while (!atomic_load(&_stopping)) {
+        BOOL haveFrame = LiWaitForNextVideoFrame(&handle, &du);
+        
+        [self applyPendingHdrUpdate];
+        
+        if (!haveFrame) {
+            // The wait only fails on shutdown or on our own LiWakeWaitForVideoFrame
+            break;
+        }
+        
+        [self submitFrame:handle decodeUnit:du];
+    }
+    
+    dispatch_semaphore_signal(_renderThreadExited);
+}
+
+- (void)displayLinkCallback:(CADisplayLink *)sender
+{
+    os_signpost_id_t signpostId = os_signpost_id_generate(VideoRendererSignpostLog());
+    
+    // Tick quantization: how far past its own tick this callback actually entered
+    double tickJitterMs = (CACurrentMediaTime() - sender.timestamp) * 1000.0;
+    os_signpost_interval_begin(VideoRendererSignpostLog(), signpostId, "DisplayLinkCallback",
+                               "tickJitterMs=%.3f", tickJitterMs);
+    
+    [self applyPendingHdrUpdate];
+    
+    // Calculate the actual display refresh rate
+    double displayRefreshRate = 1 / (sender.targetTimestamp - sender.timestamp);
+    
+    // Only pace frames if the display refresh rate is >= 90% of our stream frame rate.
+    // Battery saver, accessibility settings, or device thermals can cause the actual
+    // refresh rate of the display to drop below the physical maximum.
+    BOOL pace = displayRefreshRate >= frameRate * 0.9f;
+    
+    VIDEO_FRAME_HANDLE handle;
+    PDECODE_UNIT du;
     while (LiPollNextVideoFrame(&handle, &du)) {
-        polled++;
+        MLEnqueueResult result = [self submitFrame:handle decodeUnit:du];
         
-        // Never skip-decode IDRs: LiCompleteVideoFrame(DR_OK) would mark idrFrameProcessed
-        // without a real decode and leave later P-frames without a keyframe.
-        BOOL isIdr = (du->frameType == FRAME_TYPE_IDR);
-        
-        // Prefer the newest frame: if more remain queued, skip-decode this older one.
-        BOOL drop = !isIdr && LiGetPendingVideoFrames() >= 1;
-        // Skip age-drop while holding after an underrun so the paced frame is not discarded.
-        if (!drop && !isIdr && !recentUnderrun && nowMs > du->enqueueTimeMs &&
-            (nowMs - du->enqueueTimeMs) > maxAgeMs) {
-            drop = YES;
-        }
-        
-        if (drop) {
-            LiCompleteVideoFrame(handle, DR_OK);
-        }
-        else {
-            _enqueuedLastSubmit = NO;
-            int status = DrSubmitDecodeUnit(du);
-            LiCompleteVideoFrame(handle, status);
-            // Only count frames that actually reached ASBDL (soft-drops return DR_OK too).
-            if (_enqueuedLastSubmit) {
-                submitted++;
-            }
-        }
-        
-        if (framePacing) {
-            // Calculate the actual display refresh rate
-            double displayRefreshRate = 1 / (_displayLink.targetTimestamp - _displayLink.timestamp);
-            
-            // Only pace frames if the display refresh rate is >= 90% of our stream frame rate.
-            // Battery saver, accessibility settings, or device thermals can cause the actual
-            // refresh rate of the display to drop below the physical maximum.
-            if (displayRefreshRate >= frameRate * 0.9f) {
-                // Hold one pending frame only shortly after an underrun to smooth jitter;
-                // otherwise drain to zero pending for lowest latency on clean Wi-Fi.
-                if (recentUnderrun && LiGetPendingVideoFrames() == 1) {
-                    break;
-                }
-            }
+        // Presenting one frame per refresh is the whole point of frame pacing
+        if (pace && result == MLEnqueueResultEnqueued) {
+            break;
         }
     }
     
-    if (polled == 0 && _submittedLastCallback) {
-        _lastUnderrunMs = nowMs;
+    os_signpost_interval_end(VideoRendererSignpostLog(), signpostId, "DisplayLinkCallback");
+}
+
+// Shared by both submission drivers, so there is exactly one implementation of the state machine.
+- (MLEnqueueResult)submitFrame:(VIDEO_FRAME_HANDLE)handle decodeUnit:(PDECODE_UNIT)du
+{
+    os_signpost_id_t signpostId = os_signpost_id_generate(VideoRendererSignpostLog());
+    
+    // Recapture the clock here rather than at loop entry so frame age is measured truthfully
+    uint64_t nowMs = LiGetMillis();
+    uint64_t frameAgeMs = (nowMs > du->enqueueTimeMs) ? (nowMs - du->enqueueTimeMs) : 0;
+    os_signpost_interval_begin(VideoRendererSignpostLog(), signpostId, "SubmitFrame",
+                               "frameAgeMs=%llu pending=%d", frameAgeMs, LiGetPendingVideoFrames());
+    
+    // Never skip-decode IDRs: LiCompleteVideoFrame(DR_OK) would mark idrFrameProcessed
+    // without a real decode and leave later P-frames without a keyframe.
+    BOOL isIdr = (du->frameType == FRAME_TYPE_IDR);
+    uint64_t maxAgeMs = (frameRate > 0) ? (1500 / (uint64_t)frameRate) : 25;
+    
+    // Prefer the newest frame: if more remain queued, skip-decode this older one.
+    BOOL drop = !isIdr && (LiGetPendingVideoFrames() >= 1 || frameAgeMs > maxAgeMs);
+    
+    MLEnqueueResult result = drop ? MLEnqueueResultDropped : DrSubmitDecodeUnit(du);
+    
+    int drStatus = (result == MLEnqueueResultNeedsIdr) ? DR_NEED_IDR : DR_OK;
+    if (atomic_load(&_stopping)) {
+        // DR_NEED_IDR flushes the queue and requests a keyframe on a connection that is
+        // already being torn down, so in-flight frames always complete cleanly after the latch.
+        drStatus = DR_OK;
     }
-    _submittedLastCallback = (submitted > 0);
+    LiCompleteVideoFrame(handle, drStatus);
+    
+    os_signpost_interval_end(VideoRendererSignpostLog(), signpostId, "SubmitFrame",
+                             "result=%ld", (long)result);
+    return result;
 }
 
 - (void)stop
 {
-    [_displayLink invalidate];
+    if (_stopped) {
+        return;
+    }
+    _stopped = YES;
+    
+    // Latch before waking so any frame still in flight completes as DR_OK
+    atomic_store(&_stopping, true);
+    
+    if (_displayLink != nil) {
+        CADisplayLink* displayLink = _displayLink;
+        _displayLink = nil;
+        if ([NSThread isMainThread]) {
+            [displayLink invalidate];
+        }
+        else {
+            dispatch_sync(dispatch_get_main_queue(), ^{
+                [displayLink invalidate];
+            });
+        }
+    }
+    
+    if (_renderThread != nil) {
+        // The streaming core destroys the depacketizer queue and its mutex shortly after stop
+        // returns, so the render thread has to be gone before we hand control back.
+        LiWakeWaitForVideoFrame();
+        dispatch_semaphore_wait(_renderThreadExited, DISPATCH_TIME_FOREVER);
+        _renderThread = nil;
+    }
 }
 
 #define NAL_LENGTH_PREFIX_SIZE 4
@@ -415,30 +549,32 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
 }
 
 // Picture data is gathered once into a CMBlockBuffer-owned allocation (no intermediate assembly buffer).
-- (int)submitDecodeBuffer:(unsigned char *)data length:(int)length bufferType:(int)bufferType decodeUnit:(PDECODE_UNIT)du
+- (MLEnqueueResult)submitDecodeBuffer:(unsigned char *)data length:(int)length bufferType:(int)bufferType decodeUnit:(PDECODE_UNIT)du
 {
     OSStatus status;
-    _enqueuedLastSubmit = NO;
+    BOOL isIdr = (du->frameType == FRAME_TYPE_IDR);
     
     // Parameter sets are submitted individually before picture data
     if (bufferType != BUFFER_TYPE_PICDATA) {
-        if (du->frameType == FRAME_TYPE_IDR) {
+        if (isIdr) {
             if (bufferType == BUFFER_TYPE_VPS || bufferType == BUFFER_TYPE_SPS || bufferType == BUFFER_TYPE_PPS) {
                 int startLen = data[2] == 0x01 ? 3 : 4;
                 [parameterSetBuffers addObject:[NSData dataWithBytes:&data[startLen] length:length - startLen]];
             }
         }
         // Data is NOT to be freed here. It's a direct usage of the caller's buffer.
-        return DR_OK;
+        return MLEnqueueResultDropped;
     }
     
-    // Soft-drop before gather/rewrite when ASBDL is saturated. IDRs must not return DR_OK
-    // without enqueue (that falsely sets idrFrameProcessed); request a fresh keyframe instead.
-    if (![self->displayLayer isReadyForMoreMediaData]) {
-        if (du->frameType == FRAME_TYPE_IDR) {
-            return DR_NEED_IDR;
-        }
-        return DR_OK;
+    // Pin the renderer we are submitting into for the whole call, along with the generation it
+    // belongs to, so a concurrent main-thread layer replacement cannot be missed.
+    uint64_t generation;
+    AVSampleBufferVideoRenderer* currentRenderer = [self currentVideoRenderer:&generation];
+    
+    // Soft-drop before gather/rewrite when the renderer is saturated. IDRs must not return
+    // DR_OK without enqueue (that falsely sets idrFrameProcessed); request a fresh keyframe.
+    if (![currentRenderer isReadyForMoreMediaData]) {
+        return isIdr ? MLEnqueueResultNeedsIdr : MLEnqueueResultDropped;
     }
     
     // Capacity leaves headroom so 3-byte Annex-B can compact to 4-byte length prefixes in place
@@ -452,7 +588,7 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
                                                 kCMBlockBufferAssureMemoryNowFlag, &dataBlockBuffer);
     if (status != noErr) {
         Log(LOG_E, @"CMBlockBufferCreateWithMemoryBlock failed: %d", (int)status);
-        return DR_NEED_IDR;
+        return MLEnqueueResultNeedsIdr;
     }
     
     size_t dataOffsetAt = 0;
@@ -462,7 +598,7 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     if (status != noErr || dataPointer == NULL) {
         Log(LOG_E, @"CMBlockBufferGetDataPointer failed: %d", (int)status);
         CFRelease(dataBlockBuffer);
-        return DR_NEED_IDR;
+        return MLEnqueueResultNeedsIdr;
     }
     
     unsigned char* dest = (unsigned char*)dataPointer;
@@ -470,7 +606,7 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     if (data != NULL && length > 0) {
         if (length > capacity) {
             CFRelease(dataBlockBuffer);
-            return DR_NEED_IDR;
+            return MLEnqueueResultNeedsIdr;
         }
         memcpy(dest, data, (size_t)length);
         picLength = length;
@@ -482,7 +618,7 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
             }
             if (picLength + entry->length > capacity) {
                 CFRelease(dataBlockBuffer);
-                return DR_NEED_IDR;
+                return MLEnqueueResultNeedsIdr;
             }
             memcpy(dest + picLength, entry->data, (size_t)entry->length);
             picLength += entry->length;
@@ -491,11 +627,11 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     
     if (picLength <= 0) {
         CFRelease(dataBlockBuffer);
-        return DR_NEED_IDR;
+        return MLEnqueueResultNeedsIdr;
     }
     
     // Construct a new format description object each time we receive an IDR frame
-    if (du->frameType == FRAME_TYPE_IDR) {
+    if (isIdr) {
         // Free the old format description
         if (formatDesc != NULL) {
             CFRelease(formatDesc);
@@ -575,23 +711,28 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     
     if (formatDesc == NULL) {
         CFRelease(dataBlockBuffer);
-        return DR_NEED_IDR;
+        return MLEnqueueResultNeedsIdr;
     }
     
-    if (displayLayer.status == AVQueuedSampleBufferRenderingStatusFailed) {
-        Log(LOG_E, @"Display layer rendering failed: %@", displayLayer.error);
-        [self reinitializeDisplayLayer];
+    if (currentRenderer.status == AVQueuedSampleBufferRenderingStatusFailed) {
+        Log(LOG_E, @"Video renderer failed: %@", currentRenderer.error);
+        [self recoverFromFailedRenderer:currentRenderer generation:generation];
         CFRelease(dataBlockBuffer);
-        return DR_NEED_IDR;
+        return MLEnqueueResultNeedsIdr;
     }
     
     int sampleLength = picLength;
     if (videoFormat & (VIDEO_FORMAT_MASK_H264 | VIDEO_FORMAT_MASK_H265)) {
+        os_signpost_id_t rewriteId = os_signpost_id_generate(VideoRendererSignpostLog());
+        os_signpost_interval_begin(VideoRendererSignpostLog(), rewriteId, "AnnexBRewrite",
+                                   "bytes=%d", picLength);
         int outLength = 0;
-        if (MLRewriteAnnexBToLengthPrefixed(dest, picLength, capacity, &outLength) != 0) {
+        int rewriteResult = MLRewriteAnnexBToLengthPrefixed(dest, picLength, capacity, &outLength);
+        os_signpost_interval_end(VideoRendererSignpostLog(), rewriteId, "AnnexBRewrite");
+        if (rewriteResult != 0) {
             Log(LOG_E, @"Annex-B length-prefix rewrite failed");
             CFRelease(dataBlockBuffer);
-            return DR_NEED_IDR;
+            return MLEnqueueResultNeedsIdr;
         }
         sampleLength = outLength;
     }
@@ -601,108 +742,142 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     if (status != noErr) {
         Log(LOG_E, @"CMBlockBufferCreateWithBufferReference failed: %d", (int)status);
         CFRelease(dataBlockBuffer);
-        return DR_NEED_IDR;
+        return MLEnqueueResultNeedsIdr;
     }
         
     CMSampleBufferRef sampleBuffer;
     
     CMSampleTimingInfo sampleTiming = {kCMTimeInvalid, CMTimeMake(du->presentationTimeMs, 1000), kCMTimeInvalid};
     
+    // CMSampleBufferCreateReady does not retain the format description until it returns, so
+    // hold our own reference across the call.
+    CMVideoFormatDescriptionRef sampleFormatDesc = (CMVideoFormatDescriptionRef)CFRetain(formatDesc);
     status = CMSampleBufferCreateReady(kCFAllocatorDefault,
                                   frameBlockBuffer,
-                                  formatDesc, 1, 1,
+                                  sampleFormatDesc, 1, 1,
                                   &sampleTiming, 0, NULL,
                                   &sampleBuffer);
+    CFRelease(sampleFormatDesc);
     if (status != noErr) {
         Log(LOG_E, @"CMSampleBufferCreate failed: %d", (int)status);
         CFRelease(dataBlockBuffer);
         CFRelease(frameBlockBuffer);
-        return DR_NEED_IDR;
+        return MLEnqueueResultNeedsIdr;
+    }
+    
+    // The presentation timestamps are host-derived, or synthesized from local receive time when
+    // the host sends none, so they are tied to no client clock and cannot act as a timeline.
+    // Present on dequeue instead of trusting them.
+    CFArrayRef attachmentsArray = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, true);
+    if (attachmentsArray != NULL && CFArrayGetCount(attachmentsArray) > 0) {
+        CFMutableDictionaryRef attachments = (CFMutableDictionaryRef)CFArrayGetValueAtIndex(attachmentsArray, 0);
+        CFDictionarySetValue(attachments, kCMSampleAttachmentKey_DisplayImmediately, kCFBooleanTrue);
     }
 
-    // Re-check after sample construction; IDR must not soft-complete as DR_OK.
-    if (![self->displayLayer isReadyForMoreMediaData]) {
+    // Re-check after sample construction; IDR must not soft-complete as DR_OK. A generation
+    // change means main replaced the layer while we were preparing, so this sample is stale.
+    if ([self currentLayerGeneration] != generation || ![currentRenderer isReadyForMoreMediaData]) {
         CFRelease(dataBlockBuffer);
         CFRelease(frameBlockBuffer);
         CFRelease(sampleBuffer);
-        if (du->frameType == FRAME_TYPE_IDR) {
-            return DR_NEED_IDR;
-        }
-        return DR_OK;
+        return isIdr ? MLEnqueueResultNeedsIdr : MLEnqueueResultDropped;
     }
 
     // Enqueue the next frame
-    [self->displayLayer enqueueSampleBuffer:sampleBuffer];
-    _enqueuedLastSubmit = YES;
+    os_signpost_id_t enqueueId = os_signpost_id_generate(VideoRendererSignpostLog());
+    os_signpost_interval_begin(VideoRendererSignpostLog(), enqueueId, "Enqueue",
+                               "bytes=%d", sampleLength);
+    [currentRenderer enqueueSampleBuffer:sampleBuffer];
+    os_signpost_interval_end(VideoRendererSignpostLog(), enqueueId, "Enqueue");
     
-    if (du->frameType == FRAME_TYPE_IDR) {
-        // Ensure the layer is visible now
-        self->displayLayer.hidden = NO;
+    if (isIdr && _shownGeneration != generation) {
+        _shownGeneration = generation;
         
-        // Tell our parent VC to hide the progress indicator
-        [self->_callbacks videoContentShown];
+        AVSampleBufferDisplayLayer* layer = [self currentDisplayLayer];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            // Reveal the layer and dismiss the progress indicator in one block so they can
+            // never be split across frames
+            layer.hidden = NO;
+            [self->_callbacks videoContentShown];
+        });
     }
     
     CFRelease(dataBlockBuffer);
     CFRelease(frameBlockBuffer);
     CFRelease(sampleBuffer);
     
-    return DR_OK;
+    return MLEnqueueResultEnqueued;
 }
 
-- (void)setHdrMode:(BOOL)enabled {
+// Called on the submission thread. flush is background-safe, so it is tried before falling back
+// to main-thread layer replacement. We never set upcoming-presentation-time expectations, so
+// there is nothing for the flush to invalidate; if that ever changes, re-establish them here.
+- (void)recoverFromFailedRenderer:(AVSampleBufferVideoRenderer*)failedRenderer generation:(uint64_t)generation
+{
+    [failedRenderer flush];
+    [self resetDecodeState];
+    
+    if (failedRenderer.status != AVQueuedSampleBufferRenderingStatusFailed) {
+        return;
+    }
+    
+    Log(LOG_E, @"Video renderer did not recover from flush; replacing the display layer");
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if ([self currentLayerGeneration] != generation) {
+            // An earlier failure already replaced this layer
+            return;
+        }
+        [self createDisplayLayer];
+    });
+}
+
+- (void)setHdrMode:(BOOL)enabled metadata:(const SS_HDR_METADATA*)metadata {
+    os_unfair_lock_lock(&_hdrLock);
+    _pendingHdrEnabled = enabled;
+    _pendingHdrHasMetadata = (metadata != NULL);
+    if (metadata != NULL) {
+        _pendingHdrMetadata = *metadata;
+    }
+    else {
+        memset(&_pendingHdrMetadata, 0, sizeof(_pendingHdrMetadata));
+    }
+    // Overwriting rather than queueing is the coalescing: N queued changes produce at most one IDR
+    _pendingHdrValid = YES;
+    os_unfair_lock_unlock(&_hdrLock);
+}
+
+// Runs on the submission thread, which owns masteringDisplayColorVolume and contentLightLevelInfo.
+- (void)applyPendingHdrUpdate {
+    BOOL enabled;
+    BOOL hasMetadata;
     SS_HDR_METADATA hdrMetadata;
-    memset(&hdrMetadata, 0, sizeof(hdrMetadata));
     
-    BOOL hasMetadata = enabled && LiGetHdrMetadata(&hdrMetadata);
-    BOOL metadataChanged = NO;
+    os_unfair_lock_lock(&_hdrLock);
+    if (!_pendingHdrValid) {
+        os_unfair_lock_unlock(&_hdrLock);
+        return;
+    }
+    _pendingHdrValid = NO;
+    enabled = _pendingHdrEnabled;
+    hasMetadata = _pendingHdrHasMetadata;
+    hdrMetadata = _pendingHdrMetadata;
+    os_unfair_lock_unlock(&_hdrLock);
     
-    // Fall back to Rec.2020 / D65 / XDR-class luminance when the host sends empty metadata
-    if (enabled && (!hasMetadata || hdrMetadata.displayPrimaries[0].x == 0 || hdrMetadata.maxDisplayLuminance == 0)) {
-        // Rec.2020 primaries in 0.00002 units, D65 white point
-        hdrMetadata.displayPrimaries[0].x = 35400; // R
-        hdrMetadata.displayPrimaries[0].y = 14600;
-        hdrMetadata.displayPrimaries[1].x = 8500;  // G
-        hdrMetadata.displayPrimaries[1].y = 39850;
-        hdrMetadata.displayPrimaries[2].x = 6550;  // B
-        hdrMetadata.displayPrimaries[2].y = 2300;
-        hdrMetadata.whitePoint.x = 15635;
-        hdrMetadata.whitePoint.y = 16450;
-        hdrMetadata.maxDisplayLuminance = 1000;
-        hdrMetadata.minDisplayLuminance = 1; // 0.0001 nits units → keep minimal non-zero
+    if (enabled) {
+        // Defaults make an HDR host with empty metadata usable, so from here on the snapshot
+        // always describes a mastering display.
+        MLApplyHdrMetadataDefaults(&hdrMetadata);
         hasMetadata = YES;
     }
-    
-    if (enabled && hasMetadata && (hdrMetadata.maxContentLightLevel == 0 || hdrMetadata.maxFrameAverageLightLevel == 0)) {
-        hdrMetadata.maxContentLightLevel = 1600;
-        hdrMetadata.maxFrameAverageLightLevel = 400;
+    else {
+        hasMetadata = NO;
     }
     
-    if (hasMetadata && hdrMetadata.displayPrimaries[0].x != 0 && hdrMetadata.maxDisplayLuminance != 0) {
-        // This data is all in big-endian
-        struct {
-          vector_ushort2 primaries[3];
-          vector_ushort2 white_point;
-          uint32_t luminance_max;
-          uint32_t luminance_min;
-        } __attribute__((packed, aligned(4))) mdcv;
-
-        // mdcv is in GBR order while SS_HDR_METADATA is in RGB order
-        mdcv.primaries[0].x = __builtin_bswap16(hdrMetadata.displayPrimaries[1].x);
-        mdcv.primaries[0].y = __builtin_bswap16(hdrMetadata.displayPrimaries[1].y);
-        mdcv.primaries[1].x = __builtin_bswap16(hdrMetadata.displayPrimaries[2].x);
-        mdcv.primaries[1].y = __builtin_bswap16(hdrMetadata.displayPrimaries[2].y);
-        mdcv.primaries[2].x = __builtin_bswap16(hdrMetadata.displayPrimaries[0].x);
-        mdcv.primaries[2].y = __builtin_bswap16(hdrMetadata.displayPrimaries[0].y);
-
-        mdcv.white_point.x = __builtin_bswap16(hdrMetadata.whitePoint.x);
-        mdcv.white_point.y = __builtin_bswap16(hdrMetadata.whitePoint.y);
-
-        // These luminance values are in 10000ths of a nit
-        mdcv.luminance_max = __builtin_bswap32((uint32_t)hdrMetadata.maxDisplayLuminance * 10000);
-        mdcv.luminance_min = __builtin_bswap32(hdrMetadata.minDisplayLuminance);
-
-        NSData* newMdcv = [NSData dataWithBytes:&mdcv length:sizeof(mdcv)];
+    NSData* newMdcv = hasMetadata ? MLMasteringDisplayColorVolumeData(&hdrMetadata) : nil;
+    NSData* newCll = hasMetadata ? MLContentLightLevelInfoData(&hdrMetadata) : nil;
+    BOOL metadataChanged = NO;
+    
+    if (newMdcv != nil) {
         if (masteringDisplayColorVolume == nil || ![newMdcv isEqualToData:masteringDisplayColorVolume]) {
             masteringDisplayColorVolume = newMdcv;
             metadataChanged = YES;
@@ -713,17 +888,7 @@ int DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
         metadataChanged = YES;
     }
     
-    if (hasMetadata && hdrMetadata.maxContentLightLevel != 0 && hdrMetadata.maxFrameAverageLightLevel != 0) {
-        // This data is all in big-endian
-        struct {
-            uint16_t max_content_light_level;
-            uint16_t max_frame_average_light_level;
-        } __attribute__((packed, aligned(2))) cll;
-
-        cll.max_content_light_level = __builtin_bswap16(hdrMetadata.maxContentLightLevel);
-        cll.max_frame_average_light_level = __builtin_bswap16(hdrMetadata.maxFrameAverageLightLevel);
-
-        NSData* newCll = [NSData dataWithBytes:&cll length:sizeof(cll)];
+    if (newCll != nil) {
         if (contentLightLevelInfo == nil || ![newCll isEqualToData:contentLightLevelInfo]) {
             contentLightLevelInfo = newCll;
             metadataChanged = YES;

@@ -45,6 +45,37 @@ Bitrate: start ~40-75 Mbps for 1440p@90/120 on Wi-Fi; slider headroom to ~150 on
 - Wi-Fi probe runs once per stream start (cached); timeout defaults to Wi-Fi-safe settings
 - Single CMBlockBuffer Annex-B rewrite (in-place 4-byte / compact 3-byte); watch for decoder errors
 
+## Renderer and state-safety scenarios (device only)
+
+These target the risk introduced by the arrival-driven render thread and the HDR snapshot
+handoff. Run each on a physical device in a Release build.
+
+1. **Repeated stop and start.** Enter and leave the stream 20 times in a row without leaving the
+   app. Watch for a hang on exit (the render thread must be joined before `stop` returns), for a
+   crash inside the depacketizer (a completion landing after the queue mutex was destroyed), and
+   for memory growth across iterations.
+2. **Background and foreground recovery.** Send the app to the background mid-stream, wait past
+   the inactivity window, and return. The stream should tear down cleanly and the next launch
+   should reach video without an IDR storm.
+3. **HDR toggle mid-stream.** Toggle HDR on the host while streaming, several times. Expect one
+   IDR per real transition and no more; queued toggles must coalesce. Check that colors are
+   correct immediately after each transition, since a torn read of the mastering primaries shows
+   up as visibly wrong color rather than as an error.
+4. **Renderer saturation.** Force sustained backpressure (high bitrate over congested Wi-Fi, or a
+   resolution and refresh rate the device cannot keep up with). Drops are acceptable; renderer
+   failures, IDR storms, and a stalled picture that never recovers are not.
+
+## Thread Sanitizer scope
+
+Thread Sanitizer is not wired up in CI, and the test scheme has no `enableThreadSanitizer` on its
+test action, so it is a local, opt-in run.
+
+- Coverage stops at the prebuilt uninstrumented archives in `libs/FFmpeg`, `libs/SDL2`,
+  `libs/opus`, and OpenSSL.
+- A whole-app run reports **pre-existing** depacketizer races on `waitingForIdrFrame`,
+  `dropStatePending`, and `idrFrameProcessed`. These are upstream and are not regressions from
+  the renderer or HDR work. Do not chase them here.
+
 ## Out of scope for this soak
 
 - Off-main assemble / NAL prep

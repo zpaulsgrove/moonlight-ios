@@ -67,7 +67,7 @@
                        enableHdr:(BOOL)enableHdr
                   btMouseSupport:(BOOL)btMouseSupport
                absoluteTouchMode:(BOOL)absoluteTouchMode
-                    statsOverlay:(BOOL)statsOverlay {
+               statsOverlayLevel:(MLStatsOverlayLevel)statsOverlayLevel {
     
     [_managedObjectContext performBlockAndWait:^{
         Settings* settingsToSave = [self retrieveSettings];
@@ -86,7 +86,10 @@
         settingsToSave.enableHdr = enableHdr;
         settingsToSave.btMouseSupport = btMouseSupport;
         settingsToSave.absoluteTouchMode = absoluteTouchMode;
-        settingsToSave.statsOverlay = statsOverlay;
+        settingsToSave.statsOverlayLevel = (int32_t)statsOverlayLevel;
+        // The legacy Boolean stays in sync so the seeding below never fires again
+        // once the user has saved a level, and so a downgrade still behaves.
+        settingsToSave.statsOverlay = statsOverlayLevel != MLStatsOverlayLevelOff;
         
         [self saveData];
     }];
@@ -141,10 +144,23 @@
     __block TemporarySettings *tempSettings;
     
     [_managedObjectContext performBlockAndWait:^{
-        tempSettings = [[TemporarySettings alloc] initFromSettings:[self retrieveSettings]];
+        Settings* settings = [self retrieveSettings];
+        [self seedStatsOverlayLevelIfNeeded:settings];
+        tempSettings = [[TemporarySettings alloc] initFromSettings:settings];
     }];
     
     return tempSettings;
+}
+
+// A store written before statsOverlayLevel existed migrates in with the level at 0,
+// which reads as Off and would silently turn the overlay off for someone who had it
+// on. Promote that one case to Full and persist it so it is decided exactly once.
+// Only call from within performBlockAndWait!!!
+- (void) seedStatsOverlayLevelIfNeeded:(Settings*)settings {
+    if (settings.statsOverlayLevel == MLStatsOverlayLevelOff && settings.statsOverlay) {
+        settings.statsOverlayLevel = MLStatsOverlayLevelFull;
+        [self saveData];
+    }
 }
 
 - (Settings*) retrieveSettings {

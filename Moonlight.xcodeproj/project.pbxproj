@@ -11,8 +11,16 @@
 		A1B2C3D4E5F60718293A4B14 /* AbrBitrateHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B11 /* AbrBitrateHelpers.m */; };
 		A1B2C3D4E5F60718293A4B15 /* AbrBitrateHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B11 /* AbrBitrateHelpers.m */; };
 		A1B2C3D4E5F60718293A4B16 /* AnnexBHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B05 /* AnnexBHelpers.m */; };
+		B7C1D2E3F4A5061728394504 /* StatsOverlayFormatting.m in Sources */ = {isa = PBXBuildFile; fileRef = B7C1D2E3F4A5061728394503 /* StatsOverlayFormatting.m */; };
+		B7C1D2E3F4A5061728394505 /* StatsOverlayFormatting.m in Sources */ = {isa = PBXBuildFile; fileRef = B7C1D2E3F4A5061728394503 /* StatsOverlayFormatting.m */; };
+		B7C1D2E3F4A5061728394506 /* StatsOverlayFormatting.m in Sources */ = {isa = PBXBuildFile; fileRef = B7C1D2E3F4A5061728394503 /* StatsOverlayFormatting.m */; };
+		B7C1D2E3F4A5061728394508 /* MoonlightStatsOverlayTests.m in Sources */ = {isa = PBXBuildFile; fileRef = B7C1D2E3F4A5061728394507 /* MoonlightStatsOverlayTests.m */; };
+		B7C1D2E3F4A5061728394509 /* HdrMetadataHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B19 /* HdrMetadataHelpers.m */; };
+		B7C1D2E3F4A506172839450B /* MoonlightHdrMetadataTests.m in Sources */ = {isa = PBXBuildFile; fileRef = B7C1D2E3F4A506172839450A /* MoonlightHdrMetadataTests.m */; };
 		A1B2C3D4E5F60718293A4B17 /* Utils.m in Sources */ = {isa = PBXBuildFile; fileRef = FB89462219F646E200339C8A /* Utils.m */; };
 		A1B2C3D4E5F60718293A4B18 /* Logger.m in Sources */ = {isa = PBXBuildFile; fileRef = FBD1C8E11A8AD71400C6703C /* Logger.m */; };
+		A1B2C3D4E5F60718293A4B1B /* HdrMetadataHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B19 /* HdrMetadataHelpers.m */; };
+		A1B2C3D4E5F60718293A4B1C /* HdrMetadataHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B19 /* HdrMetadataHelpers.m */; };
 
 		A1B2C3D4E5F60718293A4B03 /* AbrController.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B01 /* AbrController.m */; };
 		A1B2C3D4E5F60718293A4B04 /* AbrController.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B01 /* AbrController.m */; };
@@ -185,11 +193,17 @@
 /* Begin PBXFileReference section */
 		A1B2C3D4E5F60718293A4B11 /* AbrBitrateHelpers.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AbrBitrateHelpers.m; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B12 /* AbrBitrateHelpers.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AbrBitrateHelpers.h; sourceTree = "<group>"; };
+		B7C1D2E3F4A5061728394502 /* StatsOverlayFormatting.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = StatsOverlayFormatting.h; sourceTree = "<group>"; };
+		B7C1D2E3F4A5061728394503 /* StatsOverlayFormatting.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = StatsOverlayFormatting.m; sourceTree = "<group>"; };
+		B7C1D2E3F4A5061728394507 /* MoonlightStatsOverlayTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MoonlightStatsOverlayTests.m; sourceTree = "<group>"; };
+		B7C1D2E3F4A506172839450A /* MoonlightHdrMetadataTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MoonlightHdrMetadataTests.m; sourceTree = "<group>"; };
 
 		A1B2C3D4E5F60718293A4B01 /* AbrController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AbrController.m; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B02 /* AbrController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AbrController.h; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B05 /* AnnexBHelpers.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AnnexBHelpers.m; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B06 /* AnnexBHelpers.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AnnexBHelpers.h; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B19 /* HdrMetadataHelpers.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HdrMetadataHelpers.m; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B1A /* HdrMetadataHelpers.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HdrMetadataHelpers.h; sourceTree = "<group>"; };
 		2639EAF244624C7E9F140C0C /* MoonlightPerfHelpersTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MoonlightPerfHelpersTests.m; sourceTree = "<group>"; };
 		7AE9F435BAE0437689FA5AF0 /* MoonlightTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MoonlightTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B0C1D2E3F405162738495A01 /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = System/Library/Frameworks/XCTest.framework; sourceTree = SDKROOT; };
@@ -216,6 +230,7 @@
 		986CCE6C2133E45300168291 /* Moonlight v1.2.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.2.xcdatamodel"; sourceTree = "<group>"; };
 		986E28A528EA989100758361 /* Moonlight v1.9.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.9.xcdatamodel"; sourceTree = "<group>"; };
 		9874E8962AE95E1D00130A3C /* Moonlight v1.10.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.10.xcdatamodel"; sourceTree = "<group>"; };
+		B7C1D2E3F4A5061728394501 /* Moonlight v1.11.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.11.xcdatamodel"; sourceTree = "<group>"; };
 		98783FEA242EAC5D00F00EF4 /* Moonlight v1.5.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.5.xcdatamodel"; sourceTree = "<group>"; };
 		98882A032AF60F5300C5A11C /* libavcodec.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libavcodec.a; path = libs/FFmpeg/lib/iOS/libavcodec.a; sourceTree = "<group>"; };
 		98882A042AF60F5300C5A11C /* libavutil.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libavutil.a; path = libs/FFmpeg/lib/iOS/libavutil.a; sourceTree = "<group>"; };
@@ -599,6 +614,10 @@
 				A1B2C3D4E5F60718293A4B05 /* AnnexBHelpers.m */,
 				A1B2C3D4E5F60718293A4B12 /* AbrBitrateHelpers.h */,
 				A1B2C3D4E5F60718293A4B11 /* AbrBitrateHelpers.m */,
+				A1B2C3D4E5F60718293A4B1A /* HdrMetadataHelpers.h */,
+				A1B2C3D4E5F60718293A4B19 /* HdrMetadataHelpers.m */,
+				B7C1D2E3F4A5061728394502 /* StatsOverlayFormatting.h */,
+				B7C1D2E3F4A5061728394503 /* StatsOverlayFormatting.m */,
 				FBD1C8E01A8AD69E00C6703C /* Logger.h */,
 				FBD1C8E11A8AD71400C6703C /* Logger.m */,
 			);
@@ -729,6 +748,8 @@
 			isa = PBXGroup;
 			children = (
 				2639EAF244624C7E9F140C0C /* MoonlightPerfHelpersTests.m */,
+				B7C1D2E3F4A5061728394507 /* MoonlightStatsOverlayTests.m */,
+				B7C1D2E3F4A506172839450A /* MoonlightHdrMetadataTests.m */,
 			);
 			path = MoonlightTests;
 			sourceTree = "<group>";
@@ -956,6 +977,8 @@
 				A1B2C3D4E5F60718293A4B04 /* AbrController.m in Sources */,
 				A1B2C3D4E5F60718293A4B08 /* AnnexBHelpers.m in Sources */,
 				A1B2C3D4E5F60718293A4B14 /* AbrBitrateHelpers.m in Sources */,
+				A1B2C3D4E5F60718293A4B1B /* HdrMetadataHelpers.m in Sources */,
+				B7C1D2E3F4A5061728394505 /* StatsOverlayFormatting.m in Sources */,
 				FB1A67A5213245BD00507771 /* StreamConfiguration.m in Sources */,
 				FB1A67A7213245BD00507771 /* StreamManager.m in Sources */,
 				FB1A67A9213245BD00507771 /* VideoDecoderRenderer.m in Sources */,
@@ -980,6 +1003,8 @@
 				A1B2C3D4E5F60718293A4B03 /* AbrController.m in Sources */,
 				A1B2C3D4E5F60718293A4B07 /* AnnexBHelpers.m in Sources */,
 				A1B2C3D4E5F60718293A4B13 /* AbrBitrateHelpers.m in Sources */,
+				A1B2C3D4E5F60718293A4B1C /* HdrMetadataHelpers.m in Sources */,
+				B7C1D2E3F4A5061728394504 /* StatsOverlayFormatting.m in Sources */,
 				FB9AFD321A7D867C00872C98 /* AppAssetRetriever.m in Sources */,
 				FB4678FF1A565DAC00377732 /* WakeOnLanManager.m in Sources */,
 				FB53E1431BE5DC4400CD6ECE /* IdManager.m in Sources */,
@@ -1028,7 +1053,11 @@
 			buildActionMask = 2147483647;
 			files = (
 				8CE916B7B43F4C1C87CDB6EC /* MoonlightPerfHelpersTests.m in Sources */,
+				B7C1D2E3F4A5061728394508 /* MoonlightStatsOverlayTests.m in Sources */,
+				B7C1D2E3F4A506172839450B /* MoonlightHdrMetadataTests.m in Sources */,
 				A1B2C3D4E5F60718293A4B15 /* AbrBitrateHelpers.m in Sources */,
+				B7C1D2E3F4A5061728394506 /* StatsOverlayFormatting.m in Sources */,
+				B7C1D2E3F4A5061728394509 /* HdrMetadataHelpers.m in Sources */,
 				A1B2C3D4E5F60718293A4B16 /* AnnexBHelpers.m in Sources */,
 				A1B2C3D4E5F60718293A4B17 /* Utils.m in Sources */,
 				A1B2C3D4E5F60718293A4B18 /* Logger.m in Sources */,
@@ -1133,7 +1162,7 @@
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 3;
-				TVOS_DEPLOYMENT_TARGET = 12.0;
+				TVOS_DEPLOYMENT_TARGET = 17.0;
 			};
 			name = Debug;
 		};
@@ -1189,7 +1218,7 @@
 				SWIFT_OBJC_INTERFACE_HEADER_NAME = "Moonlight-Swift.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 3;
-				TVOS_DEPLOYMENT_TARGET = 12.0;
+				TVOS_DEPLOYMENT_TARGET = 17.0;
 			};
 			name = Release;
 		};
@@ -1411,6 +1440,8 @@
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CODE_SIGN_STYLE = Automatic;
+				GCC_PRECOMPILE_PREFIX_HEADER = YES;
+				GCC_PREFIX_HEADER = "Limelight/Limelight-Prefix.pch";
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = (
 					"$(PROJECT_DIR)/Limelight",
@@ -1439,6 +1470,8 @@
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
 				CODE_SIGN_STYLE = Automatic;
+				GCC_PRECOMPILE_PREFIX_HEADER = YES;
+				GCC_PREFIX_HEADER = "Limelight/Limelight-Prefix.pch";
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = (
 					"$(PROJECT_DIR)/Limelight",
@@ -1531,6 +1564,7 @@
 		FB290D0519B2C406004C83CF /* Limelight.xcdatamodeld */ = {
 			isa = XCVersionGroup;
 			children = (
+				B7C1D2E3F4A5061728394501 /* Moonlight v1.11.xcdatamodel */,
 				9874E8962AE95E1D00130A3C /* Moonlight v1.10.xcdatamodel */,
 				986E28A528EA989100758361 /* Moonlight v1.9.xcdatamodel */,
 				984CD023288A310D0097D2D4 /* Moonlight v1.8.xcdatamodel */,
@@ -1547,7 +1581,7 @@
 				FB4678F21A51BDCB00377732 /* Limelight 0.3.0.xcdatamodel */,
 				FB290D0619B2C406004C83CF /* Limelight.xcdatamodel */,
 			);
-			currentVersion = 9874E8962AE95E1D00130A3C /* Moonlight v1.10.xcdatamodel */;
+			currentVersion = B7C1D2E3F4A5061728394501 /* Moonlight v1.11.xcdatamodel */;
 			path = Limelight.xcdatamodeld;
 			sourceTree = "<group>";
 			versionGroupType = wrapper.xcdatamodel;

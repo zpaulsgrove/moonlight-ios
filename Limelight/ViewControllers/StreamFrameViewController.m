@@ -30,16 +30,26 @@
 - (id)initWithRefreshRate:(float)arg1 videoDynamicRange:(int)arg2;
 @end
 
+static const CGFloat kOverlayAlpha = 0.5;
+
+#if TARGET_OS_TV
+static const CGFloat kOverlayFontSize = 24;
+#else
+static const CGFloat kOverlayFontSize = 12;
+#endif
+
 @implementation StreamFrameViewController {
     ControllerSupport *_controllerSupport;
     StreamManager *_streamMan;
     TemporarySettings *_settings;
+    MLStatsOverlayLevel _statsOverlayLevel;
     NSTimer *_inactivityTimer;
     NSTimer *_statsUpdateTimer;
     UITapGestureRecognizer *_menuTapGestureRecognizer;
     UITapGestureRecognizer *_menuDoubleTapGestureRecognizer;
     UITapGestureRecognizer *_playPauseTapGestureRecognizer;
-    UITextView *_overlayView;
+    UILabel *_statsLabel;
+    UILabel *_warningLabel;
     UILabel *_stageLabel;
     UILabel *_tipLabel;
     UIActivityIndicatorView *_spinner;
@@ -84,6 +94,7 @@
     [UIApplication sharedApplication].idleTimerDisabled = YES;
     
     _settings = [[[DataManager alloc] init] getSettings];
+    _statsOverlayLevel = _settings.statsOverlayLevel;
     
     _stageLabel = [[UILabel alloc] init];
     [_stageLabel setUserInteractionEnabled:NO];
@@ -209,6 +220,62 @@
     [self.view addSubview:_stageLabel];
     [self.view addSubview:_spinner];
     [self.view addSubview:_tipLabel];
+    
+    [self setupOverlayLabels];
+}
+
+- (UILabel*) addOverlayLabel {
+    UILabel* label = [[UILabel alloc] init];
+    label.translatesAutoresizingMaskIntoConstraints = NO;
+    label.userInteractionEnabled = NO;
+    label.textAlignment = NSTextAlignmentCenter;
+    label.textColor = [UIColor lightGrayColor];
+    label.backgroundColor = [UIColor blackColor];
+    label.alpha = kOverlayAlpha;
+    label.hidden = YES;
+    [self.view addSubview:label];
+    return label;
+}
+
+- (void) setupOverlayLabels {
+    UILayoutGuide* safeArea = self.view.safeAreaLayoutGuide;
+    NSLayoutYAxisAnchor* warningTopAnchor = safeArea.topAnchor;
+    
+    if (_statsOverlayLevel != MLStatsOverlayLevelOff) {
+        _statsLabel = [self addOverlayLabel];
+        // Monospaced digits keep the width stable across the 1 Hz refresh, so the
+        // bar never needs a relayout pass while streaming.
+        _statsLabel.font = [UIFont monospacedDigitSystemFontOfSize:kOverlayFontSize weight:UIFontWeightRegular];
+        _statsLabel.isAccessibilityElement = YES;
+        _statsLabel.accessibilityLabel = @"Stream statistics";
+        
+        if (_statsOverlayLevel == MLStatsOverlayLevelLite) {
+            _statsLabel.numberOfLines = 1;
+            _statsLabel.lineBreakMode = NSLineBreakByTruncatingTail;
+        }
+        else {
+            _statsLabel.numberOfLines = 0;
+            _statsLabel.lineBreakMode = NSLineBreakByWordWrapping;
+        }
+        
+        [NSLayoutConstraint activateConstraints:@[
+            [_statsLabel.topAnchor constraintEqualToAnchor:safeArea.topAnchor],
+            [_statsLabel.leadingAnchor constraintEqualToAnchor:safeArea.leadingAnchor],
+            [_statsLabel.trailingAnchor constraintEqualToAnchor:safeArea.trailingAnchor]
+        ]];
+        
+        warningTopAnchor = _statsLabel.bottomAnchor;
+    }
+    
+    _warningLabel = [self addOverlayLabel];
+    _warningLabel.font = [UIFont systemFontOfSize:kOverlayFontSize];
+    _warningLabel.numberOfLines = 0;
+    
+    [NSLayoutConstraint activateConstraints:@[
+        [_warningLabel.topAnchor constraintEqualToAnchor:warningTopAnchor],
+        [_warningLabel.leadingAnchor constraintEqualToAnchor:safeArea.leadingAnchor],
+        [_warningLabel.trailingAnchor constraintEqualToAnchor:safeArea.trailingAnchor]
+    ]];
 }
 
 - (UIView *)viewForZoomingInScrollView:(UIScrollView *)scrollView {
@@ -254,55 +321,22 @@
 #endif
 
 - (void)updateStatsOverlay {
-    NSString* overlayText = [self->_streamMan getStatsOverlayText];
+    NSString* overlayText = [self->_streamMan getStatsOverlayTextForLevel:self->_statsOverlayLevel];
     
     dispatch_async(dispatch_get_main_queue(), ^{
-        [self updateOverlayText:overlayText];
+        [self updateStatsText:overlayText];
     });
 }
 
-- (void)updateOverlayText:(NSString*)text {
-    if (_overlayView == nil) {
-        _overlayView = [[UITextView alloc] init];
-#if !TARGET_OS_TV
-        [_overlayView setEditable:NO];
-#endif
-        [_overlayView setUserInteractionEnabled:NO];
-        [_overlayView setSelectable:NO];
-        [_overlayView setScrollEnabled:NO];
-        
-        // HACK: If not using stats overlay, center the text
-        if (_statsUpdateTimer == nil) {
-            [_overlayView setTextAlignment:NSTextAlignmentCenter];
-        }
-        
-        [_overlayView setTextColor:[UIColor lightGrayColor]];
-        [_overlayView setBackgroundColor:[UIColor blackColor]];
-#if TARGET_OS_TV
-        [_overlayView setFont:[UIFont systemFontOfSize:24]];
-#else
-        [_overlayView setFont:[UIFont systemFontOfSize:12]];
-#endif
-        [_overlayView setAlpha:0.5];
-        [self.view addSubview:_overlayView];
-    }
-    
-    if (text != nil) {
-        // We set our bounds to the maximum width in order to work around a bug where
-        // sizeToFit interacts badly with the UITextView's line breaks, causing the
-        // width to get smaller and smaller each time as more line breaks are inserted.
-        [_overlayView setBounds:CGRectMake(self.view.frame.origin.x,
-                                           _overlayView.frame.origin.y,
-                                           self.view.frame.size.width,
-                                           _overlayView.frame.size.height)];
-        [_overlayView setText:text];
-        [_overlayView sizeToFit];
-        [_overlayView setCenter:CGPointMake(self.view.frame.size.width / 2, _overlayView.frame.size.height / 2)];
-        [_overlayView setHidden:NO];
-    }
-    else {
-        [_overlayView setHidden:YES];
-    }
+- (void)updateStatsText:(NSString*)text {
+    _statsLabel.text = text;
+    _statsLabel.accessibilityValue = text;
+    _statsLabel.hidden = text == nil;
+}
+
+- (void)updateWarningText:(NSString*)text {
+    _warningLabel.text = text;
+    _warningLabel.hidden = text == nil;
 }
 
 - (void) returnToMainFrame {
@@ -379,7 +413,7 @@
         
         [self->_controllerSupport connectionEstablished];
         
-        if (self->_settings.statsOverlay) {
+        if (self->_statsOverlayLevel != MLStatsOverlayLevelOff) {
             self->_statsUpdateTimer = [NSTimer scheduledTimerWithTimeInterval:1.0f
                                                                        target:self
                                                                      selector:@selector(updateStatsOverlay)
@@ -560,24 +594,19 @@
 
 - (void)connectionStatusUpdate:(int)status {
     Log(LOG_W, @"Connection status update: %d", status);
-
-    // The stats overlay takes precedence over these warnings
-    if (_statsUpdateTimer != nil) {
-        return;
-    }
     
     dispatch_async(dispatch_get_main_queue(), ^{
         switch (status) {
             case CONN_STATUS_OKAY:
-                [self updateOverlayText:nil];
+                [self updateWarningText:nil];
                 break;
                 
             case CONN_STATUS_POOR:
                 if (self->_streamConfig.bitRate > 5000) {
-                    [self updateOverlayText:@"Slow connection to PC\nReduce your bitrate"];
+                    [self updateWarningText:@"Slow connection to PC\nReduce your bitrate"];
                 }
                 else {
-                    [self updateOverlayText:@"Poor connection to PC"];
+                    [self updateWarningText:@"Poor connection to PC"];
                 }
                 break;
         }

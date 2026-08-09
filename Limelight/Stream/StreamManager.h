@@ -8,6 +8,7 @@
 
 #import "StreamConfiguration.h"
 #import "Connection.h"
+#import "StatsOverlayFormatting.h"
 
 @interface StreamManager : NSOperation
 
@@ -15,6 +16,6 @@
 
 - (void) stopStream;
 
-- (NSString*) getStatsOverlayText;
+- (NSString*) getStatsOverlayTextForLevel:(MLStatsOverlayLevel)level;
 
 @end

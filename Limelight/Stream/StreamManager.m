@@ -11,6 +11,7 @@
 #import "HttpManager.h"
 #import "Utils.h"
 #import "AbrController.h"
+#import "AbrBitrateHelpers.h"
 
 #import "StreamView.h"
 #import "ServerInfoResponse.h"
@@ -185,10 +186,10 @@
     return TRUE;
 }
 
-- (NSString*) getStatsOverlayText {
+- (NSString*) getStatsOverlayTextForLevel:(MLStatsOverlayLevel)level {
     video_stats_t stats;
     
-    if (!_connection) {
+    if (level == MLStatsOverlayLevelOff || !_connection) {
         return nil;
     }
     
@@ -196,9 +197,39 @@
         return nil;
     }
     
-    uint32_t rtt, variance;
+    uint32_t rtt = 0, variance = 0;
+    BOOL hasRttEstimate = LiGetEstimatedRttInfo(&rtt, &variance);
+    
+    float interval = stats.endTime - stats.startTime;
+    float framesPerSecond = MLStatsFramesPerSecond(stats.totalFrames, interval);
+    // networkDroppedFrames / interval is a per-second rate, not the percentage the
+    // label claims. Use the same ratio the adaptive bitrate controller acts on.
+    float dropRatePercent = MLDropRatePercent(stats.networkDroppedFrames, stats.totalFrames);
+    
+    BOOL hasHostProcessingLatency = stats.framesWithHostProcessingLatency != 0;
+    float averageHostProcessingLatency = hasHostProcessingLatency
+        ? (float)stats.totalHostProcessingLatency / stats.framesWithHostProcessingLatency / 10.f
+        : 0.f;
+    
+    if (level == MLStatsOverlayLevelLite) {
+        MLStatsOverlaySample sample = {
+            .width = _config.width,
+            .height = _config.height,
+            .videoFormat = MLStatsVideoFormatFromCodecName([_connection getActiveCodecName]),
+            .hdrActive = LiGetCurrentHostDisplayHdrMode(),
+            .framesPerSecond = framesPerSecond,
+            .dropRatePercent = dropRatePercent,
+            .hasRttEstimate = hasRttEstimate,
+            .rttMs = rtt,
+            .rttVarianceMs = variance,
+            .hasHostProcessingLatency = hasHostProcessingLatency,
+            .averageHostProcessingLatencyMs = averageHostProcessingLatency,
+        };
+        return MLStatsOverlayLiteLine(sample);
+    }
+    
     NSString* latencyString;
-    if (LiGetEstimatedRttInfo(&rtt, &variance)) {
+    if (hasRttEstimate) {
         latencyString = [NSString stringWithFormat:@"%u ms (variance: %u ms)", rtt, variance];
     }
     else {
@@ -206,23 +237,22 @@
     }
     
     NSString* hostProcessingString;
-    if (stats.framesWithHostProcessingLatency != 0) {
+    if (hasHostProcessingLatency) {
         hostProcessingString = [NSString stringWithFormat:@"\nHost processing latency min/max/avg: %.1f/%.1f/%.1f ms",
                                 stats.minHostProcessingLatency / 10.f,
                                 stats.maxHostProcessingLatency / 10.f,
-                                (float)stats.totalHostProcessingLatency / stats.framesWithHostProcessingLatency / 10.f];
+                                averageHostProcessingLatency];
     }
     else {
         hostProcessingString = @"";
     }
     
-    float interval = stats.endTime - stats.startTime;
     return [NSString stringWithFormat:@"Video stream: %dx%d %.2f FPS (Codec: %@)\nFrames dropped by your network connection: %.2f%%\nAverage network latency: %@%@",
             _config.width,
             _config.height,
-            stats.totalFrames / interval,
+            framesPerSecond,
             [_connection getActiveCodecName],
-            stats.networkDroppedFrames / interval,
+            dropRatePercent,
             latencyString,
             hostProcessingString];
 }

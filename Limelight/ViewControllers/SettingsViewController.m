@@ -270,7 +270,11 @@ BOOL isCustomResolution(CGSize res) {
     
     [self.touchModeSelector setSelectedSegmentIndex:currentSettings.absoluteTouchMode ? 1 : 0];
     [self.touchModeSelector addTarget:self action:@selector(touchModeChanged) forControlEvents:UIControlEventValueChanged];
-    [self.statsOverlaySelector setSelectedSegmentIndex:currentSettings.statsOverlay ? 1 : 0];
+    NSInteger statsOverlayLevel = currentSettings.statsOverlayLevel;
+    if (statsOverlayLevel < 0 || statsOverlayLevel >= self.statsOverlaySelector.numberOfSegments) {
+        statsOverlayLevel = MLStatsOverlayLevelOff;
+    }
+    [self.statsOverlaySelector setSelectedSegmentIndex:statsOverlayLevel];
     [self.btMouseSelector setSelectedSegmentIndex:currentSettings.btMouseSupport ? 1 : 0];
     [self.optimizeSettingsSelector setSelectedSegmentIndex:currentSettings.optimizeGames ? 1 : 0];
     [self.framePacingSelector setSelectedSegmentIndex:currentSettings.useFramePacing ? 1 : 0];
@@ -580,7 +584,7 @@ BOOL isCustomResolution(CGSize res) {
     BOOL btMouseSupport = [self.btMouseSelector selectedSegmentIndex] == 1;
     BOOL useFramePacing = [self.framePacingSelector selectedSegmentIndex] == 1;
     BOOL absoluteTouchMode = [self.touchModeSelector selectedSegmentIndex] == 1;
-    BOOL statsOverlay = [self.statsOverlaySelector selectedSegmentIndex] == 1;
+    MLStatsOverlayLevel statsOverlayLevel = [self getChosenStatsOverlayLevel];
     BOOL enableHdr = [self.hdrSelector selectedSegmentIndex] == 1;
     [dataMan saveSettingsWithBitrate:_bitrate
                            framerate:framerate
@@ -597,7 +601,15 @@ BOOL isCustomResolution(CGSize res) {
                            enableHdr:enableHdr
                       btMouseSupport:btMouseSupport
                    absoluteTouchMode:absoluteTouchMode
-                        statsOverlay:statsOverlay];
+                   statsOverlayLevel:statsOverlayLevel];
+}
+
+- (MLStatsOverlayLevel) getChosenStatsOverlayLevel {
+    NSInteger selected = [self.statsOverlaySelector selectedSegmentIndex];
+    if (selected < MLStatsOverlayLevelOff || selected > MLStatsOverlayLevelFull) {
+        return MLStatsOverlayLevelOff;
+    }
+    return (MLStatsOverlayLevel)selected;
 }
 
 - (void)didReceiveMemoryWarning {

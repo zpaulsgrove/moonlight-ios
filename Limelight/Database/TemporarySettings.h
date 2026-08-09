@@ -7,6 +7,7 @@
 //
 
 #import "Settings+CoreDataClass.h"
+#import "StatsOverlayFormatting.h"
 
 @interface TemporarySettings : NSObject
 
@@ -33,7 +34,7 @@
 @property (nonatomic) BOOL enableHdr;
 @property (nonatomic) BOOL btMouseSupport;
 @property (nonatomic) BOOL absoluteTouchMode;
-@property (nonatomic) BOOL statsOverlay;
+@property (nonatomic) MLStatsOverlayLevel statsOverlayLevel;
 
 - (id) initFromSettings:(Settings*)settings;
 

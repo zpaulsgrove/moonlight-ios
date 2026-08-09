@@ -44,7 +44,9 @@
     self.multiController = [[NSUserDefaults standardUserDefaults] boolForKey:@"multipleControllers"];
     self.swapABXYButtons = [[NSUserDefaults standardUserDefaults] boolForKey:@"swapABXYButtons"];
     self.btMouseSupport = [[NSUserDefaults standardUserDefaults] boolForKey:@"btMouseSupport"];
-    self.statsOverlay = [[NSUserDefaults standardUserDefaults] boolForKey:@"statsOverlay"];
+    // tvOS keeps a plain toggle in Root.plist, so on maps to the full overlay
+    self.statsOverlayLevel = [[NSUserDefaults standardUserDefaults] boolForKey:@"statsOverlay"]
+        ? MLStatsOverlayLevelFull : MLStatsOverlayLevelOff;
     
     NSInteger _screenSize = [[NSUserDefaults standardUserDefaults] integerForKey:@"streamResolution"];
     switch (_screenSize) {
@@ -84,7 +86,7 @@
     self.onscreenControls = settings.onscreenControls;
     self.btMouseSupport = settings.btMouseSupport;
     self.absoluteTouchMode = settings.absoluteTouchMode;
-    self.statsOverlay = settings.statsOverlay;
+    self.statsOverlayLevel = (MLStatsOverlayLevel)settings.statsOverlayLevel;
 #endif
     self.uniqueId = settings.uniqueId;
     
