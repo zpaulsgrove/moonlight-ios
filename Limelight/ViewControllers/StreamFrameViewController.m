@@ -17,6 +17,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <Limelight.h>
+#include <os/log.h>
 
 #if TARGET_OS_TV
 #import <AVFoundation/AVDisplayCriteria.h>
@@ -667,6 +668,13 @@ static const CGFloat kOverlayFontSize = 12;
 }
 
 - (void)gamepadPresenceChanged {
+    static os_log_t log;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        log = os_log_create("com.moonlight-stream.Moonlight", "controller");
+    });
+    os_log(log, "event=presence_changed_ui connected=%{public}lu",
+           (unsigned long)[_controllerSupport getConnectedGamepadCount]);
 #if !TARGET_OS_TV
     if (@available(iOS 11.0, *)) {
         [self setNeedsUpdateOfHomeIndicatorAutoHidden];

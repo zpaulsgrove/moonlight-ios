@@ -14,10 +14,61 @@
 #import "DataManager.h"
 #include "Limelight.h"
 
+#include <os/log.h>
+
 @import GameController;
 @import AudioToolbox;
 
 static const double MOUSE_SPEED_DIVISOR = 1.25;
+
+// Default-level so connect/disconnect churn survives device log collect (same as perf samples).
+static os_log_t ControllerOsLog(void)
+{
+    static os_log_t log;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        log = os_log_create("com.moonlight-stream.Moonlight", "controller");
+    });
+    return log;
+}
+
+static NSString *MLControllerIdentity(GCController *controller)
+{
+    if (controller == nil) {
+        return @"nil";
+    }
+    NSString *vendor = controller.vendorName ?: @"?";
+    NSString *category = controller.productCategory ?: @"?";
+    BOOL extended = controller.extendedGamepad != nil;
+    BOOL haptics = NO;
+    BOOL motion = NO;
+    BOOL battery = NO;
+    BOOL light = NO;
+    NSUInteger elementCount = 0;
+    if (@available(iOS 14.0, tvOS 14.0, *)) {
+        haptics = controller.haptics != nil;
+        motion = controller.motion != nil;
+        battery = controller.battery != nil;
+        light = controller.light != nil;
+        elementCount = controller.physicalInputProfile.allElements.count;
+    }
+    return [NSString stringWithFormat:@"ptr=%p vendor=%@ cat=%@ player=%ld ext=%d hap=%d mot=%d bat=%d led=%d elems=%lu",
+            controller,
+            vendor,
+            category,
+            (long)controller.playerIndex,
+            extended ? 1 : 0,
+            haptics ? 1 : 0,
+            motion ? 1 : 0,
+            battery ? 1 : 0,
+            light ? 1 : 0,
+            (unsigned long)elementCount];
+}
+
+static void MLLogControllerEvent(NSString *event, NSString *detail)
+{
+    os_log(ControllerOsLog(), "event=%{public}@ %{public}@", event, detail);
+}
 
 @implementation ControllerSupport {
     id _controllerConnectObserver;
@@ -46,6 +97,11 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
     char _controllerNumbers;
     bool _multiController;
     bool _swapABXYButtons;
+    
+    // Presence-churn diagnostics (main queue / connect observers only).
+    NSUInteger _controllerConnectCount;
+    NSUInteger _controllerDisconnectCount;
+    CFAbsoluteTime _lastControllerPresenceChange;
 }
 
 // UPDATE_BUTTON_FLAG(controller, flag, pressed)
@@ -408,10 +464,26 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
 
 -(void) initializeControllerHaptics:(Controller*) controller
 {
+    BOOL hasHaptics = NO;
+    if (@available(iOS 14.0, tvOS 14.0, *)) {
+        hasHaptics = controller.gamepad.haptics != nil;
+    }
+    MLLogControllerEvent(@"haptics_init",
+                         [NSString stringWithFormat:@"player=%d hasHaptics=%d %@",
+                          controller.playerIndex,
+                          hasHaptics ? 1 : 0,
+                          MLControllerIdentity(controller.gamepad)]);
     controller.lowFreqMotor = [HapticContext createContextForLowFreqMotor:controller.gamepad];
     controller.highFreqMotor = [HapticContext createContextForHighFreqMotor:controller.gamepad];
     controller.leftTriggerMotor = [HapticContext createContextForLeftTrigger:controller.gamepad];
     controller.rightTriggerMotor = [HapticContext createContextForRightTrigger:controller.gamepad];
+    MLLogControllerEvent(@"haptics_init_done",
+                         [NSString stringWithFormat:@"player=%d low=%d high=%d lt=%d rt=%d",
+                          controller.playerIndex,
+                          controller.lowFreqMotor != nil ? 1 : 0,
+                          controller.highFreqMotor != nil ? 1 : 0,
+                          controller.leftTriggerMotor != nil ? 1 : 0,
+                          controller.rightTriggerMotor != nil ? 1 : 0]);
 }
 
 -(void) cleanupControllerHaptics:(Controller*) controller
@@ -440,6 +512,11 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
 {
     if (@available(iOS 14.0, tvOS 14.0, *)) {
         if (controller.gamepad.battery) {
+            MLLogControllerEvent(@"battery_init",
+                                 [NSString stringWithFormat:@"player=%d level=%.2f state=%ld",
+                                  controller.playerIndex,
+                                  controller.gamepad.battery.batteryLevel,
+                                  (long)controller.gamepad.battery.batteryState]);
             // Poll for updated battery status every 30 seconds
             controller.batteryTimer = [NSTimer scheduledTimerWithTimeInterval:30 repeats:YES block:^(NSTimer *timer) {
                 if (controller.lastBatteryState != controller.gamepad.battery.batteryState ||
@@ -466,11 +543,20 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
                     
                     controller.lastBatteryState = controller.gamepad.battery.batteryState;
                     controller.lastBatteryLevel = controller.gamepad.battery.batteryLevel;
+                    MLLogControllerEvent(@"battery_update",
+                                         [NSString stringWithFormat:@"player=%d state=%u level=%u",
+                                          controller.playerIndex,
+                                          batteryState,
+                                          (unsigned)(controller.gamepad.battery.batteryLevel * 100)]);
                 }
             }];
             
             // Fire the timer immediately to send the initial battery state
             [controller.batteryTimer fire];
+        }
+        else {
+            MLLogControllerEvent(@"battery_init",
+                                 [NSString stringWithFormat:@"player=%d hasBattery=0", controller.playerIndex]);
         }
     }
 }
@@ -627,13 +713,32 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
     // Report the new controller to the host
     // NB: This will fail if the connection hasn't been fully established yet
     // and we will try again later.
-    if (LiSendControllerArrivalEvent(controller.playerIndex,
+    int arrivalStatus = LiSendControllerArrivalEvent(controller.playerIndex,
                                      [self getActiveGamepadMask],
                                      type,
                                      supportedButtonFlags,
-                                     capabilities) != 0) {
+                                     capabilities);
+    if (arrivalStatus != 0) {
+        MLLogControllerEvent(@"arrival_fail",
+                             [NSString stringWithFormat:@"player=%d mask=0x%x type=%u caps=0x%x buttons=0x%x status=%d %@",
+                              limeController.playerIndex,
+                              [self getActiveGamepadMask],
+                              type,
+                              capabilities,
+                              supportedButtonFlags,
+                              arrivalStatus,
+                              MLControllerIdentity(controller)]);
         return NO;
     }
+    
+    MLLogControllerEvent(@"arrival_ok",
+                         [NSString stringWithFormat:@"player=%d mask=0x%x type=%u caps=0x%x buttons=0x%x %@",
+                          limeController.playerIndex,
+                          [self getActiveGamepadMask],
+                          type,
+                          capabilities,
+                          supportedButtonFlags,
+                          MLControllerIdentity(controller)]);
     
     // Begin polling for battery status
     [self initializeControllerBattery:limeController];
@@ -930,6 +1035,14 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
     }
     
     OnScreenControlsLevel level = OnScreenControlsLevelFull;
+    BOOL hasKeyboardOrMouse = [ControllerSupport hasKeyboardOrMouse];
+    NSUInteger gcCount = [GCController controllers].count;
+    NSUInteger mouseCount = 0;
+    BOOL hasKeyboard = NO;
+    if (@available(iOS 14.0, tvOS 14.0, *)) {
+        mouseCount = GCMouse.mice.count;
+        hasKeyboard = GCKeyboard.coalescedKeyboard != nil;
+    }
     
     // We currently stop after the first controller we find.
     // Maybe we'll want to change that logic later.
@@ -956,15 +1069,37 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
         }
     }
     
+    OnScreenControlsLevel previousLevel = [_osc getLevel];
+    
     // If we didn't find a gamepad present and we have a keyboard or mouse, turn
     // the on-screen controls off to get the overlays out of the way.
-    if (level == OnScreenControlsLevelFull && [ControllerSupport hasKeyboardOrMouse]) {
+    if (level == OnScreenControlsLevelFull && hasKeyboardOrMouse) {
         level = OnScreenControlsLevelOff;
         
         // Ensure the virtual gamepad disappears to avoid confusing some games.
         // If the mouse and keyboard disconnect later, it will reappear when the
         // first OSC input is received.
+        MLLogControllerEvent(@"osc_clear_mask",
+                             [NSString stringWithFormat:@"prevLevel=%ld level=%ld gc=%lu mice=%lu kbd=%d hasKbdMouse=%d assignedMask=0x%x",
+                              (long)previousLevel,
+                              (long)level,
+                              (unsigned long)gcCount,
+                              (unsigned long)mouseCount,
+                              hasKeyboard ? 1 : 0,
+                              hasKeyboardOrMouse ? 1 : 0,
+                              [self getActiveGamepadMask]]);
         LiSendMultiControllerEvent(0, 0, 0, 0, 0, 0, 0, 0, 0);
+    }
+    
+    if (previousLevel != level) {
+        MLLogControllerEvent(@"osc_level",
+                             [NSString stringWithFormat:@"from=%ld to=%ld gc=%lu mice=%lu kbd=%d hasKbdMouse=%d",
+                              (long)previousLevel,
+                              (long)level,
+                              (unsigned long)gcCount,
+                              (unsigned long)mouseCount,
+                              hasKeyboard ? 1 : 0,
+                              hasKeyboardOrMouse ? 1 : 0]);
     }
     
     [_osc setLevel:level];
@@ -1014,10 +1149,20 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
             [_controllers setObject:limeController forKey:[NSNumber numberWithInteger:controller.playerIndex]];
             
             Log(LOG_I, @"Assigning controller index: %d", i);
+            MLLogControllerEvent(@"assign",
+                                 [NSString stringWithFormat:@"player=%d mask=0x%x gcCount=%lu %@",
+                                  i,
+                                  [self getActiveGamepadMask],
+                                  (unsigned long)[GCController controllers].count,
+                                  MLControllerIdentity(controller)]);
             return limeController;
         }
     }
     
+    MLLogControllerEvent(@"assign_fail",
+                         [NSString stringWithFormat:@"no_free_slot mask=0x%x %@",
+                          [self getActiveGamepadMask],
+                          MLControllerIdentity(controller)]);
     return nil;
 }
 
@@ -1098,8 +1243,16 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
     
     Log(LOG_I, @"Number of supported controllers connected: %d", [ControllerSupport getGamepadCount]);
     Log(LOG_I, @"Multi-controller: %d", _multiController);
+    MLLogControllerEvent(@"support_init",
+                         [NSString stringWithFormat:@"supported=%d multi=%d oscEnabled=%d gcCount=%lu kbdMouse=%d",
+                          [ControllerSupport getGamepadCount],
+                          _multiController ? 1 : 0,
+                          _oscEnabled ? 1 : 0,
+                          (unsigned long)[GCController controllers].count,
+                          [ControllerSupport hasKeyboardOrMouse] ? 1 : 0]);
     
     for (GCController* controller in [GCController controllers]) {
+        MLLogControllerEvent(@"support_init_seen", MLControllerIdentity(controller));
         if ([ControllerSupport isSupportedGamepad:controller]) {
             [self assignController:controller];
             [self registerControllerCallbacks:controller];
@@ -1107,18 +1260,38 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
             // Note: We cannot report controller arrival to the host here,
             // because the connection has not been established yet.
         }
+        else {
+            MLLogControllerEvent(@"support_init_skip",
+                                 [NSString stringWithFormat:@"unsupported %@", MLControllerIdentity(controller)]);
+        }
     }
     
     if (@available(iOS 14.0, tvOS 14.0, *)) {
         for (GCMouse* mouse in [GCMouse mice]) {
             [self registerMouseCallbacks:mouse];
         }
+        MLLogControllerEvent(@"support_init_mouse",
+                             [NSString stringWithFormat:@"mice=%lu kbd=%d",
+                              (unsigned long)GCMouse.mice.count,
+                              GCKeyboard.coalescedKeyboard != nil ? 1 : 0]);
     }
     
     _controllerConnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCControllerDidConnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
+        CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
+        CFAbsoluteTime sinceLast = self->_lastControllerPresenceChange > 0 ? (now - self->_lastControllerPresenceChange) : -1;
+        self->_lastControllerPresenceChange = now;
+        self->_controllerConnectCount++;
+        
         Log(LOG_I, @"Controller connected!");
         
         GCController* controller = note.object;
+        MLLogControllerEvent(@"gc_connect",
+                             [NSString stringWithFormat:@"n=%lu since=%.3f supported=%d mask=0x%x %@",
+                              (unsigned long)self->_controllerConnectCount,
+                              sinceLast,
+                              [ControllerSupport isSupportedGamepad:controller] ? 1 : 0,
+                              [self getActiveGamepadMask],
+                              MLControllerIdentity(controller)]);
         
         if (![ControllerSupport isSupportedGamepad:controller]) {
             // Ignore micro gamepads and motion controllers
@@ -1141,9 +1314,21 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
         }
     }];
     _controllerDisconnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCControllerDidDisconnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
+        CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
+        CFAbsoluteTime sinceLast = self->_lastControllerPresenceChange > 0 ? (now - self->_lastControllerPresenceChange) : -1;
+        self->_lastControllerPresenceChange = now;
+        self->_controllerDisconnectCount++;
+        
         Log(LOG_I, @"Controller disconnected!");
         
         GCController* controller = note.object;
+        MLLogControllerEvent(@"gc_disconnect",
+                             [NSString stringWithFormat:@"n=%lu since=%.3f supported=%d mask=0x%x %@",
+                              (unsigned long)self->_controllerDisconnectCount,
+                              sinceLast,
+                              [ControllerSupport isSupportedGamepad:controller] ? 1 : 0,
+                              [self getActiveGamepadMask],
+                              MLControllerIdentity(controller)]);
         
         if (![ControllerSupport isSupportedGamepad:controller]) {
             // Ignore micro gamepads and motion controllers
@@ -1153,6 +1338,11 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
         [self unregisterControllerCallbacks:controller];
         self->_controllerNumbers &= ~(1 << controller.playerIndex);
         Log(LOG_I, @"Unassigning controller index: %ld", (long)controller.playerIndex);
+        MLLogControllerEvent(@"unassign",
+                             [NSString stringWithFormat:@"player=%ld mask=0x%x %@",
+                              (long)controller.playerIndex,
+                              [self getActiveGamepadMask],
+                              MLControllerIdentity(controller)]);
         
         Controller* limeController = [self->_controllers objectForKey:[NSNumber numberWithInteger:controller.playerIndex]];
         if (limeController) {
@@ -1188,6 +1378,10 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
             Log(LOG_I, @"Mouse connected!");
             
             GCMouse* mouse = note.object;
+            MLLogControllerEvent(@"mouse_connect",
+                                 [NSString stringWithFormat:@"mice=%lu product=%@",
+                                  (unsigned long)GCMouse.mice.count,
+                                  mouse.vendorName ?: @"?"]);
             
             // Register for mouse events
             [self registerMouseCallbacks: mouse];
@@ -1202,6 +1396,10 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
             Log(LOG_I, @"Mouse disconnected!");
             
             GCMouse* mouse = note.object;
+            MLLogControllerEvent(@"mouse_disconnect",
+                                 [NSString stringWithFormat:@"mice=%lu product=%@",
+                                  (unsigned long)GCMouse.mice.count,
+                                  mouse.vendorName ?: @"?"]);
             
             // Unregister for mouse events
             [self unregisterMouseCallbacks: mouse];
@@ -1214,12 +1412,22 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
         }];
         _keyboardConnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCKeyboardDidConnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
             Log(LOG_I, @"Keyboard connected!");
+            MLLogControllerEvent(@"keyboard_connect",
+                                 [NSString stringWithFormat:@"kbd=%d mice=%lu hasKbdMouse=%d",
+                                  GCKeyboard.coalescedKeyboard != nil ? 1 : 0,
+                                  (unsigned long)GCMouse.mice.count,
+                                  [ControllerSupport hasKeyboardOrMouse] ? 1 : 0]);
             
             // Re-evaluate the on-screen control mode
             [self updateAutoOnScreenControlMode];
         }];
         _keyboardDisconnectObserver = [[NSNotificationCenter defaultCenter] addObserverForName:GCKeyboardDidDisconnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
             Log(LOG_I, @"Keyboard disconnected!");
+            MLLogControllerEvent(@"keyboard_disconnect",
+                                 [NSString stringWithFormat:@"kbd=%d mice=%lu hasKbdMouse=%d",
+                                  GCKeyboard.coalescedKeyboard != nil ? 1 : 0,
+                                  (unsigned long)GCMouse.mice.count,
+                                  [ControllerSupport hasKeyboardOrMouse] ? 1 : 0]);
 
             // Re-evaluate the on-screen control mode
             [self updateAutoOnScreenControlMode];
@@ -1231,6 +1439,10 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
 
 -(void) connectionEstablished
 {
+    MLLogControllerEvent(@"connection_established",
+                         [NSString stringWithFormat:@"controllers=%lu mask=0x%x",
+                          (unsigned long)_controllers.count,
+                          [self getActiveGamepadMask]]);
     for (Controller* controller in [_controllers allValues]) {
         // Report the controller arrival to the host if we haven't done so yet
         [self reportControllerArrival:controller];
@@ -1239,6 +1451,12 @@ static const double MOUSE_SPEED_DIVISOR = 1.25;
 
 -(void) cleanup
 {
+    MLLogControllerEvent(@"support_cleanup",
+                         [NSString stringWithFormat:@"connects=%lu disconnects=%lu controllers=%lu",
+                          (unsigned long)_controllerConnectCount,
+                          (unsigned long)_controllerDisconnectCount,
+                          (unsigned long)_controllers.count]);
+    
     [[NSNotificationCenter defaultCenter] removeObserver:_controllerConnectObserver];
     [[NSNotificationCenter defaultCenter] removeObserver:_controllerDisconnectObserver];
     [[NSNotificationCenter defaultCenter] removeObserver:_mouseConnectObserver];
