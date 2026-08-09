@@ -211,6 +211,11 @@
         ? (float)stats.totalHostProcessingLatency / stats.framesWithHostProcessingLatency / 10.f
         : 0.f;
     
+    BOOL hasClientQueueLatency = stats.framesWithClientQueueLatency != 0;
+    float averageClientQueueLatency = hasClientQueueLatency
+        ? (float)stats.totalClientQueueLatencyMs / (float)stats.framesWithClientQueueLatency
+        : 0.f;
+    
     if (level == MLStatsOverlayLevelLite) {
         MLStatsOverlaySample sample = {
             .width = _config.width,
@@ -224,6 +229,8 @@
             .rttVarianceMs = variance,
             .hasHostProcessingLatency = hasHostProcessingLatency,
             .averageHostProcessingLatencyMs = averageHostProcessingLatency,
+            .hasClientQueueLatency = hasClientQueueLatency,
+            .averageClientQueueLatencyMs = averageClientQueueLatency,
         };
         return MLStatsOverlayLiteLine(sample);
     }
@@ -247,14 +254,26 @@
         hostProcessingString = @"";
     }
     
-    return [NSString stringWithFormat:@"Video stream: %dx%d %.2f FPS (Codec: %@)\nFrames dropped by your network connection: %.2f%%\nAverage network latency: %@%@",
+    NSString* clientQueueString;
+    if (hasClientQueueLatency) {
+        clientQueueString = [NSString stringWithFormat:@"\nClient queue latency min/max/avg: %.1f/%.1f/%.1f ms",
+                             (float)stats.minClientQueueLatencyMs,
+                             (float)stats.maxClientQueueLatencyMs,
+                             averageClientQueueLatency];
+    }
+    else {
+        clientQueueString = @"";
+    }
+    
+    return [NSString stringWithFormat:@"Video stream: %dx%d %.2f FPS (Codec: %@)\nFrames dropped by your network connection: %.2f%%\nAverage network latency: %@%@%@",
             _config.width,
             _config.height,
             framesPerSecond,
             [_connection getActiveCodecName],
             dropRatePercent,
             latencyString,
-            hostProcessingString];
+            hostProcessingString,
+            clientQueueString];
 }
 
 @end

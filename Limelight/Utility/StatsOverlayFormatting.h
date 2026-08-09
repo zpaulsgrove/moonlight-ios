@@ -26,6 +26,8 @@ typedef struct {
     uint32_t rttVarianceMs;
     BOOL hasHostProcessingLatency;
     float averageHostProcessingLatencyMs;
+    BOOL hasClientQueueLatency;
+    float averageClientQueueLatencyMs;
 } MLStatsOverlaySample;
 
 // "1080p" for a known height, "?" when the dimensions are not usable yet.
@@ -39,7 +41,7 @@ FOUNDATION_EXPORT NSString* MLStatsShortCodecName(int videoFormat, BOOL hdrActiv
 FOUNDATION_EXPORT float MLStatsFramesPerSecond(int totalFrames, float intervalSeconds);
 
 // Single top-pinned line, for example:
-// 1080p HEVC HDR · 59.9 fps · drop 0.08% · net 8 ms ±2 · host 3.1 ms
+// 1080p HEVC HDR · 59.9 fps · drop 0.08% · net 8 ms ±2 · host 3.1 ms · queue 0.2 ms
 FOUNDATION_EXPORT NSString* MLStatsOverlayLiteLine(MLStatsOverlaySample sample);
 
 NS_ASSUME_NONNULL_END

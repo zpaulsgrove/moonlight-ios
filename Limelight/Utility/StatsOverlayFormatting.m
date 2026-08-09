@@ -76,5 +76,9 @@ NSString* MLStatsOverlayLiteLine(MLStatsOverlaySample sample) {
         [components addObject:[NSString stringWithFormat:@"host %.1f ms", sample.averageHostProcessingLatencyMs]];
     }
     
+    if (sample.hasClientQueueLatency) {
+        [components addObject:[NSString stringWithFormat:@"queue %.1f ms", sample.averageClientQueueLatencyMs]];
+    }
+    
     return [components componentsJoinedByString:kStatsOverlaySeparator];
 }

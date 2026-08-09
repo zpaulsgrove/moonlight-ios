@@ -31,13 +31,15 @@ static MLStatsOverlaySample HdrSample(void) {
         .rttVarianceMs = 2,
         .hasHostProcessingLatency = YES,
         .averageHostProcessingLatencyMs = 3.1f,
+        .hasClientQueueLatency = YES,
+        .averageClientQueueLatencyMs = 0.2f,
     };
     return sample;
 }
 
 - (void)testLiteLineHdrVariant {
     XCTAssertEqualObjects(MLStatsOverlayLiteLine(HdrSample()),
-                          @"1080p HEVC HDR · 59.9 fps · drop 0.08% · net 8 ms ±2 · host 3.1 ms");
+                          @"1080p HEVC HDR · 59.9 fps · drop 0.08% · net 8 ms ±2 · host 3.1 ms · queue 0.2 ms");
 }
 
 - (void)testLiteLineSdrVariant {
@@ -53,10 +55,12 @@ static MLStatsOverlaySample HdrSample(void) {
         .rttVarianceMs = 1,
         .hasHostProcessingLatency = YES,
         .averageHostProcessingLatencyMs = 2.5f,
+        .hasClientQueueLatency = YES,
+        .averageClientQueueLatencyMs = 0.0f,
     };
     
     XCTAssertEqualObjects(MLStatsOverlayLiteLine(sample),
-                          @"1440p AV1 · 119.8 fps · drop 0.00% · net 4 ms ±1 · host 2.5 ms");
+                          @"1440p AV1 · 119.8 fps · drop 0.00% · net 4 ms ±1 · host 2.5 ms · queue 0.0 ms");
 }
 
 - (void)testLiteLineWithoutRttEstimate {
@@ -66,7 +70,7 @@ static MLStatsOverlaySample HdrSample(void) {
     sample.rttVarianceMs = 0;
     
     XCTAssertEqualObjects(MLStatsOverlayLiteLine(sample),
-                          @"1080p HEVC HDR · 59.9 fps · drop 0.08% · net n/a · host 3.1 ms");
+                          @"1080p HEVC HDR · 59.9 fps · drop 0.08% · net n/a · host 3.1 ms · queue 0.2 ms");
 }
 
 - (void)testLiteLineWithoutHostProcessingLatency {
@@ -75,7 +79,16 @@ static MLStatsOverlaySample HdrSample(void) {
     sample.averageHostProcessingLatencyMs = 0.0f;
     
     XCTAssertEqualObjects(MLStatsOverlayLiteLine(sample),
-                          @"1080p HEVC HDR · 59.9 fps · drop 0.08% · net 8 ms ±2");
+                          @"1080p HEVC HDR · 59.9 fps · drop 0.08% · net 8 ms ±2 · queue 0.2 ms");
+}
+
+- (void)testLiteLineWithoutClientQueueLatency {
+    MLStatsOverlaySample sample = HdrSample();
+    sample.hasClientQueueLatency = NO;
+    sample.averageClientQueueLatencyMs = 0.0f;
+    
+    XCTAssertEqualObjects(MLStatsOverlayLiteLine(sample),
+                          @"1080p HEVC HDR · 59.9 fps · drop 0.08% · net 8 ms ±2 · host 3.1 ms");
 }
 
 - (void)testLiteLineWithEmptyStatsWindow {
@@ -84,7 +97,7 @@ static MLStatsOverlaySample HdrSample(void) {
     sample.dropRatePercent = MLDropRatePercent(0, 0);
     
     XCTAssertEqualObjects(MLStatsOverlayLiteLine(sample),
-                          @"1080p HEVC HDR · 0.0 fps · drop 0.00% · net 8 ms ±2 · host 3.1 ms");
+                          @"1080p HEVC HDR · 0.0 fps · drop 0.00% · net 8 ms ±2 · host 3.1 ms · queue 0.2 ms");
 }
 
 - (void)testLiteLineUsesDropPercentageNotPerSecondRate {

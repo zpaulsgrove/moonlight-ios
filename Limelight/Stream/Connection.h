@@ -21,6 +21,12 @@ typedef struct {
     int framesWithHostProcessingLatency;
     int maxHostProcessingLatency;
     int minHostProcessingLatency;
+    // Sum of (submitTime - decodeUnit.enqueueTime) over frames that entered submitFrame.
+    // This is client queue wait only, not decode or display.
+    uint64_t totalClientQueueLatencyMs;
+    int framesWithClientQueueLatency;
+    uint64_t minClientQueueLatencyMs;
+    uint64_t maxClientQueueLatencyMs;
 } video_stats_t;
 
 @interface Connection : NSOperation <NSStreamDelegate>
@@ -34,3 +40,7 @@ typedef struct {
 -(int) getActiveVideoFormat;
 
 @end
+
+// Called on the submission thread for every waited/polled frame. Records client queue wait
+// (LiGetMillis() - decodeUnit.enqueueTimeMs) into the current 0.5s video stats window.
+FOUNDATION_EXPORT void DrNoteClientQueueAgeMs(uint64_t ageMs);

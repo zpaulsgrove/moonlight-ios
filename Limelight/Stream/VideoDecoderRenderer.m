@@ -11,6 +11,8 @@
 #import "AnnexBHelpers.h"
 #import "HdrMetadataHelpers.h"
 
+void DrNoteClientQueueAgeMs(uint64_t ageMs);
+
 #include <stdatomic.h>
 #include <string.h>
 
@@ -281,6 +283,8 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     // backlog into visible pixelation (exactly what Smoothest Video was hitting).
     int pendingFrames = LiGetPendingVideoFrames();
     BOOL drop = !framePacing && !isIdr && pendingFrames >= 1;
+    
+    DrNoteClientQueueAgeMs(frameAgeMs);
     
     os_signpost_interval_begin(VideoRendererSignpostLog(), signpostId, "SubmitFrame",
                                "frameAgeMs=%llu pending=%d", frameAgeMs, pendingFrames);

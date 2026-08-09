@@ -85,6 +85,20 @@ void DrStop(void)
     return activeVideoFormat;
 }
 
+void DrNoteClientQueueAgeMs(uint64_t ageMs)
+{
+    // Submission thread only, same writer as DrSubmitDecodeUnit's currentVideoStats updates.
+    if (currentVideoStats.framesWithClientQueueLatency == 0 ||
+        ageMs < currentVideoStats.minClientQueueLatencyMs) {
+        currentVideoStats.minClientQueueLatencyMs = ageMs;
+    }
+    if (ageMs > currentVideoStats.maxClientQueueLatencyMs) {
+        currentVideoStats.maxClientQueueLatencyMs = ageMs;
+    }
+    currentVideoStats.totalClientQueueLatencyMs += ageMs;
+    currentVideoStats.framesWithClientQueueLatency++;
+}
+
 -(NSString*) getActiveCodecName
 {
     switch (activeVideoFormat)
