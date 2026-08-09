@@ -94,6 +94,9 @@ static void NotePendingPeak(atomic_int *peak, int pending)
     // whole streak rather than one per skipped frame.
     BOOL _arrivalDecodeChainBroken;
     BOOL _arrivalIdrRequestedForSoftDrop;
+    // After a soft-drop IDR recovers, pause drop-to-newest briefly. Otherwise continuous
+    // pending>=N at 120 fps re-enters soft-drop and hammers the host with IDRs.
+    uint64_t _softDropIdrCooldownoldownUntilMs;
     
     NSThread* _renderThread;
     dispatch_semaphore_t _renderThreadExited;
@@ -247,6 +250,7 @@ static void NotePendingPeak(atomic_int *peak, int pending)
 {
     _arrivalDecodeChainBroken = NO;
     _arrivalIdrRequestedForSoftDrop = NO;
+    _softDropIdrCooldownoldownUntilMs = 0;
     
     if (framePacing) {
         _displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(displayLinkCallback:)];
@@ -337,13 +341,22 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     // without a real decode and leave later P-frames without a keyframe.
     BOOL isIdr = (du->frameType == FRAME_TYPE_IDR);
     
-    // Prefer the newest frame only on the arrival-driven path. Soft-completing a skipped
-    // P-frame never feeds it to the decoder, so reference chains break until an IDR. After the
-    // first skip we request one IDR for the streak and refuse later P-frames until that
-    // keyframe is enqueued. Frame pacing drains in order and never soft-drops.
+    // Prefer the newest frame only on the arrival-driven path when the depacketizer is
+    // actually backed up. A single pending frame is normal at 120 Hz; treating that as
+    // overflow caused soft-drop → IDR → recover → soft-drop loops on lossy Wi-Fi.
+    // Soft-completing a skipped P-frame never feeds it to the decoder, so reference chains
+    // break until an IDR. After the first skip we request one IDR for the streak and refuse
+    // later P-frames until that keyframe is enqueued. A cooldown then blocks starting a new
+    // bout so recovery does not immediately thrash again. Frame pacing drains in order and
+    // never soft-drops.
+    static const int kSoftDropPendingThreshold = 2;
+    static const uint64_t kSoftDropIdrCooldownoldownMs = 1500;
+    
     int pendingFrames = LiGetPendingVideoFrames();
     NotePendingPeak(&_maxPendingFrames, pendingFrames);
-    BOOL dropForNewest = !framePacing && !isIdr && pendingFrames >= 1;
+    BOOL cooldownActive = nowMs < _softDropIdrCooldownoldownUntilMs;
+    BOOL dropForNewest = !framePacing && !isIdr && !cooldownActive &&
+                         pendingFrames >= kSoftDropPendingThreshold;
     BOOL dropBrokenChain = !framePacing && !isIdr && _arrivalDecodeChainBroken;
     BOOL drop = dropForNewest || dropBrokenChain;
     
@@ -364,8 +377,10 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
             drStatus = DR_NEED_IDR;
             atomic_fetch_add_explicit(&_softDropIdrRequests, 1, memory_order_relaxed);
             os_log(VideoRendererPerfLog(),
-                        "event=softdrop_idr pending=%{public}d ageMs=%{public}llu",
-                        pendingFrames, (unsigned long long)frameAgeMs);
+                        "event=softdrop_idr pending=%{public}d ageMs=%{public}llu cooldownMs=%{public}llu",
+                        pendingFrames,
+                        (unsigned long long)frameAgeMs,
+                        (unsigned long long)kSoftDropIdrCooldownoldownMs);
         }
         else {
             drStatus = DR_OK;
@@ -383,7 +398,11 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
             _arrivalIdrRequestedForSoftDrop = NO;
             atomic_fetch_add_explicit(&_idrEnqueued, 1, memory_order_relaxed);
             if (wasBroken) {
-                os_log(VideoRendererPerfLog(), "event=softdrop_recovered");
+                _softDropIdrCooldownoldownUntilMs = nowMs + kSoftDropIdrCooldownoldownMs;
+                os_log(VideoRendererPerfLog(),
+                       "event=softdrop_recovered cooldownMs=%{public}llu pending=%{public}d",
+                       (unsigned long long)kSoftDropIdrCooldownoldownMs,
+                       pendingFrames);
             }
         }
     }
