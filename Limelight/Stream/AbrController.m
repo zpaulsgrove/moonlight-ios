@@ -177,7 +177,7 @@ static os_log_t AbrPerfLog(void)
                 self->_currentKbps = target;
                 Log(LOG_I, @"ABR set bitrate to %ld kbps (drops=%.2f%% rttVar=%u)",
                     (long)target, dropRatePercent, variance);
-                os_log_info(AbrPerfLog(),
+                os_log(AbrPerfLog(),
                             "event=abr kbps=%{public}ld prev=%{public}ld drop=%.2f var=%{public}u",
                             (long)target, (long)prev, dropRatePercent, variance);
             }

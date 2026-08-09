@@ -363,7 +363,7 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
             _arrivalIdrRequestedForSoftDrop = YES;
             drStatus = DR_NEED_IDR;
             atomic_fetch_add_explicit(&_softDropIdrRequests, 1, memory_order_relaxed);
-            os_log_info(VideoRendererPerfLog(),
+            os_log(VideoRendererPerfLog(),
                         "event=softdrop_idr pending=%{public}d ageMs=%{public}llu",
                         pendingFrames, (unsigned long long)frameAgeMs);
         }
@@ -383,7 +383,7 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
             _arrivalIdrRequestedForSoftDrop = NO;
             atomic_fetch_add_explicit(&_idrEnqueued, 1, memory_order_relaxed);
             if (wasBroken) {
-                os_log_info(VideoRendererPerfLog(), "event=softdrop_recovered");
+                os_log(VideoRendererPerfLog(), "event=softdrop_recovered");
             }
         }
     }
@@ -681,7 +681,7 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     if (![currentRenderer isReadyForMoreMediaData]) {
         atomic_fetch_add_explicit(&_saturatedDrops, 1, memory_order_relaxed);
         if (isIdr) {
-            os_log_info(VideoRendererPerfLog(), "event=sat_idr");
+            os_log(VideoRendererPerfLog(), "event=sat_idr");
             return MLEnqueueResultNeedsIdr;
         }
         return MLEnqueueResultDropped;
@@ -1045,7 +1045,7 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     // If the metadata changed, request an IDR frame to re-create the CMVideoFormatDescription.
     // Re-check stop so a snapshot that landed during teardown cannot still request an IDR.
     if (metadataChanged && !atomic_load(&_stopping)) {
-        os_log_info(VideoRendererPerfLog(),
+        os_log(VideoRendererPerfLog(),
                     "event=hdr_idr enabled=%{public}d",
                     enabled ? 1 : 0);
         LiRequestIdrFrame();

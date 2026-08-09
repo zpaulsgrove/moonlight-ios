@@ -150,7 +150,8 @@
         dispatch_once(&onceToken, ^{
             perfLog = os_log_create("com.moonlight-stream.Moonlight", "perf");
         });
-        os_log_info(perfLog,
+        // Default level so lines persist into device log archives (Info often does not).
+        os_log(perfLog,
                     "event=stream_start res=%{public}dx%{public}d fps=%{public}d bitrate=%{public}d pacing=%{public}d wifi=%{public}d hdrReq=%{public}d",
                     self->_config.width,
                     self->_config.height,
@@ -346,7 +347,7 @@
     
     // Greppable key=value line for Console / `log show` after a stream session.
     // host*/queue* use -1 when that window had no samples.
-    os_log_info(perfLog,
+    os_log(perfLog,
                 "fps=%.1f drop=%.2f dropN=%{public}d total=%{public}d recv=%{public}d net=%{public}d var=%{public}d host=%.1f hostMin=%.1f hostMax=%.1f queue=%.1f queueMin=%.1f queueMax=%.1f soft=%{public}llu softIdr=%{public}llu sat=%{public}llu idrNeed=%{public}llu idrOk=%{public}llu pendingMax=%{public}d abr=%{public}ld abrOn=%{public}d wifi=%{public}d res=%{public}dx%{public}d fmt=%{public}d hdr=%{public}d pacing=%{public}d",
                 framesPerSecond,
                 dropRatePercent,
