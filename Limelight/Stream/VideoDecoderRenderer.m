@@ -40,6 +40,29 @@ static os_log_t VideoRendererSignpostLog(void)
     return log;
 }
 
+// Same subsystem as StreamManager samples; rare render events land under category "perf".
+static os_log_t VideoRendererPerfLog(void)
+{
+    static os_log_t log;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        log = os_log_create("com.moonlight-stream.Moonlight", "perf");
+    });
+    return log;
+}
+
+static void NotePendingPeak(atomic_int *peak, int pending)
+{
+    int expected = atomic_load_explicit(peak, memory_order_relaxed);
+    while (pending > expected) {
+        if (atomic_compare_exchange_weak_explicit(peak, &expected, pending,
+                                                  memory_order_relaxed,
+                                                  memory_order_relaxed)) {
+            break;
+        }
+    }
+}
+
 @implementation VideoDecoderRenderer {
     StreamView* _view;
     id<ConnectionCallbacks> _callbacks;
@@ -76,6 +99,14 @@ static os_log_t VideoRendererSignpostLog(void)
     dispatch_semaphore_t _renderThreadExited;
     atomic_bool _stopping;
     BOOL _stopped;
+    
+    // Submission-thread increments; consumePerfDelta drains them for the 1 Hz sample.
+    atomic_uint_fast64_t _softDroppedFrames;
+    atomic_uint_fast64_t _softDropIdrRequests;
+    atomic_uint_fast64_t _saturatedDrops;
+    atomic_uint_fast64_t _needsIdrResults;
+    atomic_uint_fast64_t _idrEnqueued;
+    atomic_int _maxPendingFrames;
     
     // HDR snapshot handed over from the control callback thread. Only the newest pending
     // snapshot survives, so a burst of host toggles cannot produce a burst of IDR requests.
@@ -178,12 +209,32 @@ static os_log_t VideoRendererSignpostLog(void)
     _hdrLock = OS_UNFAIR_LOCK_INIT;
     _renderThreadExited = dispatch_semaphore_create(0);
     atomic_init(&_stopping, false);
+    atomic_init(&_softDroppedFrames, 0);
+    atomic_init(&_softDropIdrRequests, 0);
+    atomic_init(&_saturatedDrops, 0);
+    atomic_init(&_needsIdrResults, 0);
+    atomic_init(&_idrEnqueued, 0);
+    atomic_init(&_maxPendingFrames, 0);
     
     parameterSetBuffers = [[NSMutableArray alloc] init];
     
     [self createDisplayLayer];
     
     return self;
+}
+
+- (void)consumePerfDelta:(MLRendererPerfDelta *)outDelta
+{
+    if (outDelta == NULL) {
+        return;
+    }
+    memset(outDelta, 0, sizeof(*outDelta));
+    outDelta->softDroppedFrames = atomic_exchange_explicit(&_softDroppedFrames, 0, memory_order_relaxed);
+    outDelta->softDropIdrRequests = atomic_exchange_explicit(&_softDropIdrRequests, 0, memory_order_relaxed);
+    outDelta->saturatedDrops = atomic_exchange_explicit(&_saturatedDrops, 0, memory_order_relaxed);
+    outDelta->needsIdrResults = atomic_exchange_explicit(&_needsIdrResults, 0, memory_order_relaxed);
+    outDelta->idrEnqueued = atomic_exchange_explicit(&_idrEnqueued, 0, memory_order_relaxed);
+    outDelta->maxPendingFrames = atomic_exchange_explicit(&_maxPendingFrames, 0, memory_order_relaxed);
 }
 
 - (void)setupWithVideoFormat:(int)videoFormat width:(int)videoWidth height:(int)videoHeight frameRate:(int)frameRate
@@ -291,6 +342,7 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     // first skip we request one IDR for the streak and refuse later P-frames until that
     // keyframe is enqueued. Frame pacing drains in order and never soft-drops.
     int pendingFrames = LiGetPendingVideoFrames();
+    NotePendingPeak(&_maxPendingFrames, pendingFrames);
     BOOL dropForNewest = !framePacing && !isIdr && pendingFrames >= 1;
     BOOL dropBrokenChain = !framePacing && !isIdr && _arrivalDecodeChainBroken;
     BOOL drop = dropForNewest || dropBrokenChain;
@@ -305,10 +357,15 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     
     if (drop) {
         result = MLEnqueueResultDropped;
+        atomic_fetch_add_explicit(&_softDroppedFrames, 1, memory_order_relaxed);
         if (!_arrivalIdrRequestedForSoftDrop) {
             _arrivalDecodeChainBroken = YES;
             _arrivalIdrRequestedForSoftDrop = YES;
             drStatus = DR_NEED_IDR;
+            atomic_fetch_add_explicit(&_softDropIdrRequests, 1, memory_order_relaxed);
+            os_log_info(VideoRendererPerfLog(),
+                        "event=softdrop_idr pending=%{public}d ageMs=%{public}llu",
+                        pendingFrames, (unsigned long long)frameAgeMs);
         }
         else {
             drStatus = DR_OK;
@@ -316,10 +373,18 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     }
     else {
         result = DrSubmitDecodeUnit(du);
+        if (result == MLEnqueueResultNeedsIdr) {
+            atomic_fetch_add_explicit(&_needsIdrResults, 1, memory_order_relaxed);
+        }
         drStatus = (result == MLEnqueueResultNeedsIdr) ? DR_NEED_IDR : DR_OK;
         if (isIdr && result == MLEnqueueResultEnqueued) {
+            BOOL wasBroken = _arrivalDecodeChainBroken;
             _arrivalDecodeChainBroken = NO;
             _arrivalIdrRequestedForSoftDrop = NO;
+            atomic_fetch_add_explicit(&_idrEnqueued, 1, memory_order_relaxed);
+            if (wasBroken) {
+                os_log_info(VideoRendererPerfLog(), "event=softdrop_recovered");
+            }
         }
     }
     
@@ -614,7 +679,12 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     // Soft-drop before gather/rewrite when the renderer is saturated. IDRs must not return
     // DR_OK without enqueue (that falsely sets idrFrameProcessed); request a fresh keyframe.
     if (![currentRenderer isReadyForMoreMediaData]) {
-        return isIdr ? MLEnqueueResultNeedsIdr : MLEnqueueResultDropped;
+        atomic_fetch_add_explicit(&_saturatedDrops, 1, memory_order_relaxed);
+        if (isIdr) {
+            os_log_info(VideoRendererPerfLog(), "event=sat_idr");
+            return MLEnqueueResultNeedsIdr;
+        }
+        return MLEnqueueResultDropped;
     }
     
     // Capacity leaves headroom so 3-byte Annex-B can compact to 4-byte length prefixes in place
@@ -975,6 +1045,9 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     // If the metadata changed, request an IDR frame to re-create the CMVideoFormatDescription.
     // Re-check stop so a snapshot that landed during teardown cannot still request an IDR.
     if (metadataChanged && !atomic_load(&_stopping)) {
+        os_log_info(VideoRendererPerfLog(),
+                    "event=hdr_idr enabled=%{public}d",
+                    enabled ? 1 : 0);
         LiRequestIdrFrame();
     }
 }

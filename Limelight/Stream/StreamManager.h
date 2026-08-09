@@ -18,4 +18,9 @@
 
 - (NSString*) getStatsOverlayTextForLevel:(MLStatsOverlayLevel)level;
 
+// Emits one structured os_log line (subsystem com.moonlight-stream.Moonlight, category perf)
+// with Lite fields plus soft-drop/ABR deltas for later device log collection. Rare events use
+// the same category with an event= prefix.
+- (void) logPerfSample;
+
 @end

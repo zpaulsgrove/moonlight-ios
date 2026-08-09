@@ -11,6 +11,7 @@
 #import "ConnectionCallbacks.h"
 
 #include "Limelight.h"
+#include <stdint.h>
 
 // Outcome of a single submission attempt. Both submission drivers (the arrival-driven render
 // thread and the frame-pacing display link) read this instead of a shared boolean side channel.
@@ -19,6 +20,16 @@ typedef NS_ENUM(NSInteger, MLEnqueueResult) {
     MLEnqueueResultDropped,   // deliberately not enqueued; safe to complete as DR_OK
     MLEnqueueResultNeedsIdr,  // could not be enqueued; the stream needs a fresh keyframe
 };
+
+// Delta counters since the last consume call. Used by StreamManager's 1 Hz perf sample.
+typedef struct {
+    uint64_t softDroppedFrames;
+    uint64_t softDropIdrRequests;
+    uint64_t saturatedDrops;
+    uint64_t needsIdrResults;
+    uint64_t idrEnqueued;
+    int maxPendingFrames;
+} MLRendererPerfDelta;
 
 @interface VideoDecoderRenderer : NSObject
 
@@ -33,5 +44,8 @@ typedef NS_ENUM(NSInteger, MLEnqueueResult) {
 - (void)setHdrMode:(BOOL)enabled metadata:(const SS_HDR_METADATA*)metadata;
 
 - (MLEnqueueResult)submitDecodeBuffer:(unsigned char *)data length:(int)length bufferType:(int)bufferType decodeUnit:(PDECODE_UNIT)du;
+
+// Atomically copies and clears the delta window used for os_log category "perf" samples.
+- (void)consumePerfDelta:(MLRendererPerfDelta *)outDelta;
 
 @end

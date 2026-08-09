@@ -21,12 +21,15 @@
 
 #include <Limelight.h>
 
+#include <os/log.h>
+
 @implementation StreamManager {
     StreamConfiguration* _config;
 
     UIView* _renderView;
     id<ConnectionCallbacks> _callbacks;
     Connection* _connection;
+    VideoDecoderRenderer* _renderer;
     AbrController* _abrController;
 }
 
@@ -134,12 +137,28 @@
         (void)[Utils isActiveNetworkWiFi];
         
         VideoDecoderRenderer* renderer = [[VideoDecoderRenderer alloc] initWithView:self->_renderView callbacks:self->_callbacks streamAspectRatio:(float)self->_config.width / (float)self->_config.height useFramePacing:self->_config.useFramePacing];
+        self->_renderer = renderer;
         self->_connection = [[Connection alloc] initWithConfig:self->_config renderer:renderer connectionCallbacks:self->_callbacks];
         self->_abrController = [[AbrController alloc] initWithConfig:self->_config connection:self->_connection];
         NSOperationQueue* opQueue = [[NSOperationQueue alloc] init];
         [opQueue addOperation:self->_connection];
         // Start ABR after the connection object exists; it probes the host asynchronously
         [self->_abrController start];
+        
+        static os_log_t perfLog;
+        static dispatch_once_t onceToken;
+        dispatch_once(&onceToken, ^{
+            perfLog = os_log_create("com.moonlight-stream.Moonlight", "perf");
+        });
+        os_log_info(perfLog,
+                    "event=stream_start res=%{public}dx%{public}d fps=%{public}d bitrate=%{public}d pacing=%{public}d wifi=%{public}d hdrReq=%{public}d",
+                    self->_config.width,
+                    self->_config.height,
+                    self->_config.frameRate,
+                    self->_config.bitRate,
+                    self->_config.useFramePacing ? 1 : 0,
+                    [Utils isActiveNetworkWiFi] ? 1 : 0,
+                    (self->_config.supportedVideoFormats & VIDEO_FORMAT_MASK_10BIT) ? 1 : 0);
     });
 }
 
@@ -148,6 +167,7 @@
     [_abrController stop];
     _abrController = nil;
     [_connection terminate];
+    _renderer = nil;
 }
 
 - (BOOL) launchApp:(HttpManager*)hMan receiveSessionUrl:(NSString**)sessionUrl {
@@ -274,6 +294,87 @@
             latencyString,
             hostProcessingString,
             clientQueueString];
+}
+
+- (void)logPerfSample {
+    if (!_connection) {
+        return;
+    }
+    
+    video_stats_t stats;
+    if (![_connection getVideoStats:&stats]) {
+        return;
+    }
+    
+    uint32_t rtt = 0, variance = 0;
+    BOOL hasRttEstimate = LiGetEstimatedRttInfo(&rtt, &variance);
+    
+    float interval = stats.endTime - stats.startTime;
+    float framesPerSecond = MLStatsFramesPerSecond(stats.totalFrames, interval);
+    float dropRatePercent = MLDropRatePercent(stats.networkDroppedFrames, stats.totalFrames);
+    
+    float hostMs = stats.framesWithHostProcessingLatency != 0
+        ? (float)stats.totalHostProcessingLatency / stats.framesWithHostProcessingLatency / 10.f
+        : -1.f;
+    float hostMinMs = stats.framesWithHostProcessingLatency != 0
+        ? stats.minHostProcessingLatency / 10.f
+        : -1.f;
+    float hostMaxMs = stats.framesWithHostProcessingLatency != 0
+        ? stats.maxHostProcessingLatency / 10.f
+        : -1.f;
+    float queueMs = stats.framesWithClientQueueLatency != 0
+        ? (float)stats.totalClientQueueLatencyMs / (float)stats.framesWithClientQueueLatency
+        : -1.f;
+    float queueMinMs = stats.framesWithClientQueueLatency != 0
+        ? (float)stats.minClientQueueLatencyMs
+        : -1.f;
+    float queueMaxMs = stats.framesWithClientQueueLatency != 0
+        ? (float)stats.maxClientQueueLatencyMs
+        : -1.f;
+    
+    MLRendererPerfDelta delta = {0};
+    [_renderer consumePerfDelta:&delta];
+    
+    NSInteger abrKbps = _abrController != nil ? [_abrController currentBitrateKbps] : _config.bitRate;
+    int abrOn = (_abrController != nil && [_abrController isActive]) ? 1 : 0;
+    
+    static os_log_t perfLog;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        perfLog = os_log_create("com.moonlight-stream.Moonlight", "perf");
+    });
+    
+    // Greppable key=value line for Console / `log show` after a stream session.
+    // host*/queue* use -1 when that window had no samples.
+    os_log_info(perfLog,
+                "fps=%.1f drop=%.2f dropN=%{public}d total=%{public}d recv=%{public}d net=%{public}d var=%{public}d host=%.1f hostMin=%.1f hostMax=%.1f queue=%.1f queueMin=%.1f queueMax=%.1f soft=%{public}llu softIdr=%{public}llu sat=%{public}llu idrNeed=%{public}llu idrOk=%{public}llu pendingMax=%{public}d abr=%{public}ld abrOn=%{public}d wifi=%{public}d res=%{public}dx%{public}d fmt=%{public}d hdr=%{public}d pacing=%{public}d",
+                framesPerSecond,
+                dropRatePercent,
+                stats.networkDroppedFrames,
+                stats.totalFrames,
+                stats.receivedFrames,
+                hasRttEstimate ? (int)rtt : -1,
+                hasRttEstimate ? (int)variance : -1,
+                hostMs,
+                hostMinMs,
+                hostMaxMs,
+                queueMs,
+                queueMinMs,
+                queueMaxMs,
+                (unsigned long long)delta.softDroppedFrames,
+                (unsigned long long)delta.softDropIdrRequests,
+                (unsigned long long)delta.saturatedDrops,
+                (unsigned long long)delta.needsIdrResults,
+                (unsigned long long)delta.idrEnqueued,
+                delta.maxPendingFrames,
+                (long)abrKbps,
+                abrOn,
+                [Utils isActiveNetworkWiFi] ? 1 : 0,
+                _config.width,
+                _config.height,
+                [_connection getActiveVideoFormat],
+                LiGetCurrentHostDisplayHdrMode() ? 1 : 0,
+                _config.useFramePacing ? 1 : 0);
 }
 
 @end

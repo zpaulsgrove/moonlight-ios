@@ -11,6 +11,17 @@
 #import "AbrBitrateHelpers.h"
 
 #include <Limelight.h>
+#include <os/log.h>
+
+static os_log_t AbrPerfLog(void)
+{
+    static os_log_t log;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        log = os_log_create("com.moonlight-stream.Moonlight", "perf");
+    });
+    return log;
+}
 
 @implementation AbrController {
     StreamConfiguration* _config;
@@ -105,6 +116,14 @@
     _timer = nil;
 }
 
+- (BOOL)isActive {
+    return _supported;
+}
+
+- (NSInteger)currentBitrateKbps {
+    return _currentKbps;
+}
+
 - (void)tick {
     if (!_supported || _applyInFlight) {
         return;
@@ -154,9 +173,13 @@
             }
             self->_applyInFlight = NO;
             if (applied) {
+                NSInteger prev = self->_currentKbps;
                 self->_currentKbps = target;
                 Log(LOG_I, @"ABR set bitrate to %ld kbps (drops=%.2f%% rttVar=%u)",
                     (long)target, dropRatePercent, variance);
+                os_log_info(AbrPerfLog(),
+                            "event=abr kbps=%{public}ld prev=%{public}ld drop=%.2f var=%{public}u",
+                            (long)target, (long)prev, dropRatePercent, variance);
             }
             else {
                 Log(LOG_W, @"ABR bitrate apply failed for %ld kbps; keeping %ld kbps",

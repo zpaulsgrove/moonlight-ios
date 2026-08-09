@@ -321,6 +321,12 @@ static const CGFloat kOverlayFontSize = 12;
 #endif
 
 - (void)updateStatsOverlay {
+    [self->_streamMan logPerfSample];
+    
+    if (self->_statsOverlayLevel == MLStatsOverlayLevelOff) {
+        return;
+    }
+    
     NSString* overlayText = [self->_streamMan getStatsOverlayTextForLevel:self->_statsOverlayLevel];
     
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -413,13 +419,13 @@ static const CGFloat kOverlayFontSize = 12;
         
         [self->_controllerSupport connectionEstablished];
         
-        if (self->_statsOverlayLevel != MLStatsOverlayLevelOff) {
-            self->_statsUpdateTimer = [NSTimer scheduledTimerWithTimeInterval:1.0f
-                                                                       target:self
-                                                                     selector:@selector(updateStatsOverlay)
-                                                                     userInfo:nil
-                                                                      repeats:YES];
-        }
+        // Always sample perf once per second into os_log (category "perf"), even when the
+        // on-screen overlay is Off, so sessions can be reconstructed from device logs later.
+        self->_statsUpdateTimer = [NSTimer scheduledTimerWithTimeInterval:1.0f
+                                                                   target:self
+                                                                 selector:@selector(updateStatsOverlay)
+                                                                 userInfo:nil
+                                                                  repeats:YES];
     });
 }
 

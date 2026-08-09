@@ -21,6 +21,11 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)start;
 - (void)stop;
 
+// YES after the host advertised ABR support and the tick timer is running.
+- (BOOL)isActive;
+// Last applied (or initial) target bitrate in kbps. Meaningful even before isActive.
+- (NSInteger)currentBitrateKbps;
+
 // Pure helper for tests: clamp a candidate bitrate into [floor, ceiling].
 + (NSInteger)clampBitrate:(NSInteger)candidate ceiling:(NSInteger)ceiling floor:(NSInteger)floor;
 
