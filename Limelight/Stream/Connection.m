@@ -80,6 +80,11 @@ void DrStop(void)
     return NO;
 }
 
+-(int) getActiveVideoFormat
+{
+    return activeVideoFormat;
+}
+
 -(NSString*) getActiveCodecName
 {
     switch (activeVideoFormat)

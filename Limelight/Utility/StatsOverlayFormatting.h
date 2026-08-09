@@ -35,10 +35,6 @@ FOUNDATION_EXPORT NSString* MLStatsResolutionLabel(int width, int height);
 // videoFormat is a VIDEO_FORMAT_* value from Limelight.h.
 FOUNDATION_EXPORT NSString* MLStatsShortCodecName(int videoFormat, BOOL hdrActive);
 
-// Connection owns the negotiated video format privately, so the format is recovered
-// from the long codec name it already publishes. Returns 0 for an unrecognized name.
-FOUNDATION_EXPORT int MLStatsVideoFormatFromCodecName(NSString* _Nullable codecName);
-
 // 0 when the stats window has no duration, so a partial window cannot produce inf.
 FOUNDATION_EXPORT float MLStatsFramesPerSecond(int totalFrames, float intervalSeconds);
 

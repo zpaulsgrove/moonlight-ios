@@ -117,15 +117,4 @@ static MLStatsOverlaySample HdrSample(void) {
     XCTAssertEqualObjects(MLStatsShortCodecName(0, NO), @"Unknown");
 }
 
-- (void)testVideoFormatRecoveredFromLongCodecName {
-    XCTAssertEqual(MLStatsVideoFormatFromCodecName(@"H.264"), VIDEO_FORMAT_H264);
-    XCTAssertEqual(MLStatsVideoFormatFromCodecName(@"HEVC"), VIDEO_FORMAT_H265);
-    XCTAssertEqual(MLStatsVideoFormatFromCodecName(@"HEVC Main 10 HDR"), VIDEO_FORMAT_H265_MAIN10);
-    XCTAssertEqual(MLStatsVideoFormatFromCodecName(@"HEVC Main 10 SDR"), VIDEO_FORMAT_H265_MAIN10);
-    XCTAssertEqual(MLStatsVideoFormatFromCodecName(@"AV1"), VIDEO_FORMAT_AV1_MAIN8);
-    XCTAssertEqual(MLStatsVideoFormatFromCodecName(@"AV1 10-bit HDR"), VIDEO_FORMAT_AV1_MAIN10);
-    XCTAssertEqual(MLStatsVideoFormatFromCodecName(@"UNKNOWN"), 0);
-    XCTAssertEqual(MLStatsVideoFormatFromCodecName(nil), 0);
-}
-
 @end

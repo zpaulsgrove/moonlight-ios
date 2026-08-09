@@ -215,7 +215,7 @@
         MLStatsOverlaySample sample = {
             .width = _config.width,
             .height = _config.height,
-            .videoFormat = MLStatsVideoFormatFromCodecName([_connection getActiveCodecName]),
+            .videoFormat = [_connection getActiveVideoFormat],
             .hdrActive = LiGetCurrentHostDisplayHdrMode(),
             .framesPerSecond = framesPerSecond,
             .dropRatePercent = dropRatePercent,

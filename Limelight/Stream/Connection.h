@@ -30,5 +30,7 @@ typedef struct {
 -(void) main;
 -(BOOL) getVideoStats:(video_stats_t*)stats;
 -(NSString*) getActiveCodecName;
+// Negotiated VIDEO_FORMAT_* value from decoder setup, or 0 before the first frame.
+-(int) getActiveVideoFormat;
 
 @end

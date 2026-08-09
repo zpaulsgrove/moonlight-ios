@@ -44,30 +44,6 @@ NSString* MLStatsShortCodecName(int videoFormat, BOOL hdrActive) {
     return name;
 }
 
-int MLStatsVideoFormatFromCodecName(NSString* codecName) {
-    if (codecName == nil) {
-        return 0;
-    }
-    
-    if ([codecName hasPrefix:@"H.264"]) {
-        return VIDEO_FORMAT_H264;
-    }
-    if ([codecName hasPrefix:@"HEVC Main 10"]) {
-        return VIDEO_FORMAT_H265_MAIN10;
-    }
-    if ([codecName hasPrefix:@"HEVC"]) {
-        return VIDEO_FORMAT_H265;
-    }
-    if ([codecName hasPrefix:@"AV1 10-bit"]) {
-        return VIDEO_FORMAT_AV1_MAIN10;
-    }
-    if ([codecName hasPrefix:@"AV1"]) {
-        return VIDEO_FORMAT_AV1_MAIN8;
-    }
-    
-    return 0;
-}
-
 float MLStatsFramesPerSecond(int totalFrames, float intervalSeconds) {
     if (totalFrames <= 0 || intervalSeconds <= 0.0f || !isfinite(intervalSeconds)) {
         return 0.0f;
