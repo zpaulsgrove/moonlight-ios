@@ -274,12 +274,13 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     // without a real decode and leave later P-frames without a keyframe.
     BOOL isIdr = (du->frameType == FRAME_TYPE_IDR);
     
-    // Prefer the newest frame: if more remain queued, skip-decode this older one.
-    // Never age-drop when pending is 0. After LiWaitForNextVideoFrame the waited frame is
-    // already outside the queue, so an age-only drop would discard the only picture and create
-    // an artificial underrun on the arrival-driven path.
+    // Prefer the newest frame only on the arrival-driven path. Soft-completing a skipped
+    // P-frame as DR_OK never feeds it to the decoder, so the next predicted frame references
+    // missing state and paints as blocky corruption until an IDR. Frame pacing intentionally
+    // drains at display rate and must preserve decode order; drop-to-newest there turns a
+    // backlog into visible pixelation (exactly what Smoothest Video was hitting).
     int pendingFrames = LiGetPendingVideoFrames();
-    BOOL drop = !isIdr && pendingFrames >= 1;
+    BOOL drop = !framePacing && !isIdr && pendingFrames >= 1;
     
     os_signpost_interval_begin(VideoRendererSignpostLog(), signpostId, "SubmitFrame",
                                "frameAgeMs=%llu pending=%d", frameAgeMs, pendingFrames);
