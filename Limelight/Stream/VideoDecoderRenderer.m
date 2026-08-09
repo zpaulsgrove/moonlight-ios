@@ -269,16 +269,20 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     // Recapture the clock here rather than at loop entry so frame age is measured truthfully
     uint64_t nowMs = LiGetMillis();
     uint64_t frameAgeMs = (nowMs > du->enqueueTimeMs) ? (nowMs - du->enqueueTimeMs) : 0;
-    os_signpost_interval_begin(VideoRendererSignpostLog(), signpostId, "SubmitFrame",
-                               "frameAgeMs=%llu pending=%d", frameAgeMs, LiGetPendingVideoFrames());
     
     // Never skip-decode IDRs: LiCompleteVideoFrame(DR_OK) would mark idrFrameProcessed
     // without a real decode and leave later P-frames without a keyframe.
     BOOL isIdr = (du->frameType == FRAME_TYPE_IDR);
-    uint64_t maxAgeMs = (frameRate > 0) ? (1500 / (uint64_t)frameRate) : 25;
     
     // Prefer the newest frame: if more remain queued, skip-decode this older one.
-    BOOL drop = !isIdr && (LiGetPendingVideoFrames() >= 1 || frameAgeMs > maxAgeMs);
+    // Never age-drop when pending is 0. After LiWaitForNextVideoFrame the waited frame is
+    // already outside the queue, so an age-only drop would discard the only picture and create
+    // an artificial underrun on the arrival-driven path.
+    int pendingFrames = LiGetPendingVideoFrames();
+    BOOL drop = !isIdr && pendingFrames >= 1;
+    
+    os_signpost_interval_begin(VideoRendererSignpostLog(), signpostId, "SubmitFrame",
+                               "frameAgeMs=%llu pending=%d", frameAgeMs, pendingFrames);
     
     MLEnqueueResult result = drop ? MLEnqueueResultDropped : DrSubmitDecodeUnit(du);
     
@@ -774,30 +778,59 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
         CFDictionarySetValue(attachments, kCMSampleAttachmentKey_DisplayImmediately, kCFBooleanTrue);
     }
 
-    // Re-check after sample construction; IDR must not soft-complete as DR_OK. A generation
-    // change means main replaced the layer while we were preparing, so this sample is stale.
-    if ([self currentLayerGeneration] != generation || ![currentRenderer isReadyForMoreMediaData]) {
+    // Re-check and enqueue under the same lock so a concurrent createDisplayLayer cannot leave
+    // this sample on a discarded renderer while we still report Enqueued.
+    os_signpost_id_t enqueueId = os_signpost_id_generate(VideoRendererSignpostLog());
+    os_signpost_interval_begin(VideoRendererSignpostLog(), enqueueId, "Enqueue",
+                               "bytes=%d", sampleLength);
+    
+    AVSampleBufferDisplayLayer* layerToReveal = nil;
+    BOOL shouldReveal = NO;
+    
+    os_unfair_lock_lock(&_layerLock);
+    BOOL canEnqueue = (_layerGeneration == generation &&
+                       videoRenderer == currentRenderer &&
+                       [videoRenderer isReadyForMoreMediaData]);
+    if (!canEnqueue) {
+        os_unfair_lock_unlock(&_layerLock);
+        os_signpost_interval_end(VideoRendererSignpostLog(), enqueueId, "Enqueue");
         CFRelease(dataBlockBuffer);
         CFRelease(frameBlockBuffer);
         CFRelease(sampleBuffer);
         return isIdr ? MLEnqueueResultNeedsIdr : MLEnqueueResultDropped;
     }
-
-    // Enqueue the next frame
-    os_signpost_id_t enqueueId = os_signpost_id_generate(VideoRendererSignpostLog());
-    os_signpost_interval_begin(VideoRendererSignpostLog(), enqueueId, "Enqueue",
-                               "bytes=%d", sampleLength);
-    [currentRenderer enqueueSampleBuffer:sampleBuffer];
+    
+    [videoRenderer enqueueSampleBuffer:sampleBuffer];
+    
+    // Defer _shownGeneration until reveal succeeds so a skipped reveal leaves a future IDR
+    // free to try again on this or a later generation.
+    if (isIdr && _shownGeneration != generation) {
+        layerToReveal = displayLayer;
+        shouldReveal = (layerToReveal != nil);
+    }
+    os_unfair_lock_unlock(&_layerLock);
+    
     os_signpost_interval_end(VideoRendererSignpostLog(), enqueueId, "Enqueue");
     
-    if (isIdr && _shownGeneration != generation) {
-        _shownGeneration = generation;
-        
-        AVSampleBufferDisplayLayer* layer = [self currentDisplayLayer];
+    if (shouldReveal) {
+        uint64_t revealGeneration = generation;
         dispatch_async(dispatch_get_main_queue(), ^{
+            os_unfair_lock_lock(&self->_layerLock);
+            BOOL stillCurrent = (self->_layerGeneration == revealGeneration &&
+                                 self->displayLayer == layerToReveal &&
+                                 self->_shownGeneration != revealGeneration);
+            if (stillCurrent) {
+                self->_shownGeneration = revealGeneration;
+            }
+            os_unfair_lock_unlock(&self->_layerLock);
+            
+            if (!stillCurrent) {
+                return;
+            }
+            
             // Reveal the layer and dismiss the progress indicator in one block so they can
             // never be split across frames
-            layer.hidden = NO;
+            layerToReveal.hidden = NO;
             [self->_callbacks videoContentShown];
         });
     }
