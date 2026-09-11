@@ -67,7 +67,9 @@
                        enableHdr:(BOOL)enableHdr
                   btMouseSupport:(BOOL)btMouseSupport
                absoluteTouchMode:(BOOL)absoluteTouchMode
-               statsOverlayLevel:(MLStatsOverlayLevel)statsOverlayLevel {
+               statsOverlayLevel:(MLStatsOverlayLevel)statsOverlayLevel
+           aggressiveWifiPackets:(BOOL)aggressiveWifiPackets
+          disableEncryptionOnLan:(BOOL)disableEncryptionOnLan {
     
     [_managedObjectContext performBlockAndWait:^{
         Settings* settingsToSave = [self retrieveSettings];
@@ -90,6 +92,8 @@
         // The legacy Boolean stays in sync so the seeding below never fires again
         // once the user has saved a level, and so a downgrade still behaves.
         settingsToSave.statsOverlay = statsOverlayLevel != MLStatsOverlayLevelOff;
+        settingsToSave.aggressiveWifiPackets = aggressiveWifiPackets;
+        settingsToSave.disableEncryptionOnLan = disableEncryptionOnLan;
         
         [self saveData];
     }];

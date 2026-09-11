@@ -47,6 +47,8 @@
     // tvOS keeps a plain toggle in Root.plist, so on maps to the full overlay
     self.statsOverlayLevel = [[NSUserDefaults standardUserDefaults] boolForKey:@"statsOverlay"]
         ? MLStatsOverlayLevelFull : MLStatsOverlayLevelOff;
+    self.aggressiveWifiPackets = [[NSUserDefaults standardUserDefaults] boolForKey:@"aggressiveWifiPackets"];
+    self.disableEncryptionOnLan = [[NSUserDefaults standardUserDefaults] boolForKey:@"disableEncryptionOnLan"];
     
     NSInteger _screenSize = [[NSUserDefaults standardUserDefaults] integerForKey:@"streamResolution"];
     switch (_screenSize) {
@@ -87,6 +89,8 @@
     self.btMouseSupport = settings.btMouseSupport;
     self.absoluteTouchMode = settings.absoluteTouchMode;
     self.statsOverlayLevel = (MLStatsOverlayLevel)settings.statsOverlayLevel;
+    self.aggressiveWifiPackets = settings.aggressiveWifiPackets;
+    self.disableEncryptionOnLan = settings.disableEncryptionOnLan;
 #endif
     self.uniqueId = settings.uniqueId;
     

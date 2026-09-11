@@ -653,6 +653,8 @@ static NSMutableSet* hostList;
     _streamConfig.playAudioOnPC = streamSettings.playAudioOnPC;
     _streamConfig.useFramePacing = streamSettings.useFramePacing;
     _streamConfig.swapABXYButtons = streamSettings.swapABXYButtons;
+    _streamConfig.aggressiveWifiPackets = streamSettings.aggressiveWifiPackets;
+    _streamConfig.disableEncryptionOnLan = streamSettings.disableEncryptionOnLan;
     
     // multiController must be set before calling getConnectedGamepadMask
     _streamConfig.multiController = streamSettings.multiController;

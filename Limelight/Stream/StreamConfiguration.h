@@ -30,6 +30,8 @@
 @property int supportedVideoFormats;
 @property BOOL multiController;
 @property BOOL useFramePacing;
+@property BOOL aggressiveWifiPackets;
+@property BOOL disableEncryptionOnLan;
 @property NSData* serverCert;
 
 @end

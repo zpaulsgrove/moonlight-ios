@@ -601,7 +601,7 @@ static const CGFloat kOverlayFontSize = 12;
 
 - (void)connectionStatusUpdate:(int)status {
     Log(LOG_W, @"Connection status update: %d", status);
-    
+    [_streamMan connectionStatusUpdate:status];
     dispatch_async(dispatch_get_main_queue(), ^{
         switch (status) {
             case CONN_STATUS_OKAY:

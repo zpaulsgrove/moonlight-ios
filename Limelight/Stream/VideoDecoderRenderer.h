@@ -39,6 +39,9 @@ typedef struct {
 - (void)start;
 - (void)stop;
 
+// When YES (non-Vibepollo local fallback / poor path), soft-drop sooner on the arrival path.
+@property (atomic) BOOL networkPressureMode;
+
 // Takes an immutable HDR snapshot captured on the caller's thread. Pass NULL for metadata when
 // the host reported none. The snapshot is applied on whichever thread drives submission.
 - (void)setHdrMode:(BOOL)enabled metadata:(const SS_HDR_METADATA*)metadata;

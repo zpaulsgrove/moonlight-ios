@@ -27,14 +27,57 @@
 - (void)testAbrNextBitrateDropsAndRecover {
     NSInteger ceiling = 57000;
     NSInteger floor = 22800;
-    
-    NSInteger afterHeavyDrops = MLNextAbrBitrate(57000, ceiling, floor, 6.0f, 10);
-    XCTAssertLessThan(afterHeavyDrops, 57000);
+
+    NSInteger afterHeavyDrops = MLNextAbrBitrate(57000, ceiling, floor, 6.0f, 10, 0.0f, 0.0f, NO);
+    XCTAssertEqual(afterHeavyDrops, (NSInteger)(57000 * 0.70));
     XCTAssertGreaterThanOrEqual(afterHeavyDrops, floor);
-    
-    NSInteger afterStable = MLNextAbrBitrate(30000, ceiling, floor, 0.0f, 2);
-    XCTAssertGreaterThan(afterStable, 30000);
+
+    NSInteger afterModerate = MLNextAbrBitrate(50000, ceiling, floor, 3.0f, 10, 0.0f, 0.0f, NO);
+    XCTAssertEqual(afterModerate, (NSInteger)(50000 * 0.90));
+
+    NSInteger afterLight = MLNextAbrBitrate(50000, ceiling, floor, 1.0f, 10, 0.0f, 0.0f, NO);
+    XCTAssertEqual(afterLight, (NSInteger)(50000 * 0.95));
+
+    NSInteger afterStable = MLNextAbrBitrate(30000, ceiling, floor, 0.0f, 2, 0.0f, 0.0f, NO);
+    XCTAssertEqual(afterStable, 30000 + MAX(30000 / 50, 500));
     XCTAssertLessThanOrEqual(afterStable, ceiling);
+}
+
+- (void)testAbrNextBitrateFecQueueAndPoor {
+    NSInteger ceiling = 57000;
+    NSInteger floor = 22800;
+
+    NSInteger afterPoor = MLNextAbrBitrate(50000, ceiling, floor, 0.0f, 2, 0.0f, 0.0f, YES);
+    XCTAssertEqual(afterPoor, (NSInteger)(50000 * 0.70));
+
+    NSInteger afterHeavyFec = MLNextAbrBitrate(50000, ceiling, floor, 0.0f, 2, 16.0f, 0.0f, NO);
+    XCTAssertEqual(afterHeavyFec, (NSInteger)(50000 * 0.70));
+
+    NSInteger afterModQueue = MLNextAbrBitrate(50000, ceiling, floor, 0.0f, 2, 0.0f, 17.0f, NO);
+    XCTAssertEqual(afterModQueue, (NSInteger)(50000 * 0.90));
+
+    NSInteger afterLightFec = MLNextAbrBitrate(50000, ceiling, floor, 0.0f, 2, 4.0f, 0.0f, NO);
+    XCTAssertEqual(afterLightFec, (NSInteger)(50000 * 0.95));
+
+    // Hold steady in the dead band (not bad enough to cut, not clean enough to bump)
+    NSInteger held = MLNextAbrBitrate(40000, ceiling, floor, 0.2f, 10, 1.5f, 7.0f, NO);
+    XCTAssertEqual(held, 40000);
+
+    NSInteger clampedFloor = MLNextAbrBitrate(floor, ceiling, floor, 10.0f, 50, 0.0f, 0.0f, NO);
+    XCTAssertEqual(clampedFloor, floor);
+
+    NSInteger nearCeiling = MLNextAbrBitrate(ceiling - 100, ceiling, floor, 0.0f, 1, 0.0f, 0.0f, NO);
+    XCTAssertEqual(nearCeiling, ceiling);
+}
+
+- (void)testAbrFecRepairAndQueueLatencyHelpers {
+    XCTAssertEqualWithAccuracy(MLFecRepairRatePercent(0, 120), 0.0f, 0.001f);
+    XCTAssertEqualWithAccuracy(MLFecRepairRatePercent(3, 100), 3.0f, 0.001f);
+    XCTAssertEqualWithAccuracy(MLFecRepairRatePercent(5, 0), 0.0f, 0.001f);
+
+    XCTAssertEqualWithAccuracy(MLAvgQueueLatencyMs(0, 0), 0.0f, 0.001f);
+    XCTAssertEqualWithAccuracy(MLAvgQueueLatencyMs(250, 10), 25.0f, 0.001f);
+    XCTAssertEqualWithAccuracy(MLAvgQueueLatencyMs(100, -1), 0.0f, 0.001f);
 }
 
 - (void)testAbrDropRatePercent {
@@ -161,21 +204,25 @@
     int remote = 0;
     int packet = 0;
     
-    [Utils streamRemoteMode:&remote packetSize:&packet isVPN:YES isPrivateLAN:YES isWiFi:YES];
+    [Utils streamRemoteMode:&remote packetSize:&packet isVPN:YES isPrivateLAN:YES isWiFi:YES aggressiveWifiPackets:NO];
     XCTAssertEqual(remote, STREAM_CFG_REMOTE);
     XCTAssertEqual(packet, 1024);
     
-    [Utils streamRemoteMode:&remote packetSize:&packet isVPN:NO isPrivateLAN:YES isWiFi:YES];
+    [Utils streamRemoteMode:&remote packetSize:&packet isVPN:NO isPrivateLAN:YES isWiFi:YES aggressiveWifiPackets:NO];
     XCTAssertEqual(remote, STREAM_CFG_LOCAL);
     XCTAssertEqual(packet, 1024);
     
-    [Utils streamRemoteMode:&remote packetSize:&packet isVPN:NO isPrivateLAN:YES isWiFi:NO];
+    [Utils streamRemoteMode:&remote packetSize:&packet isVPN:NO isPrivateLAN:YES isWiFi:NO aggressiveWifiPackets:NO];
     XCTAssertEqual(remote, STREAM_CFG_LOCAL);
     XCTAssertEqual(packet, 1392);
     
-    [Utils streamRemoteMode:&remote packetSize:&packet isVPN:NO isPrivateLAN:NO isWiFi:YES];
+    [Utils streamRemoteMode:&remote packetSize:&packet isVPN:NO isPrivateLAN:NO isWiFi:YES aggressiveWifiPackets:NO];
     XCTAssertEqual(remote, STREAM_CFG_AUTO);
     XCTAssertEqual(packet, 1024);
+    
+    [Utils streamRemoteMode:&remote packetSize:&packet isVPN:NO isPrivateLAN:YES isWiFi:YES aggressiveWifiPackets:YES];
+    XCTAssertEqual(remote, STREAM_CFG_LOCAL);
+    XCTAssertEqual(packet, 1392);
 }
 
 - (void)testAbrInitialKbpsWiFiRamp {

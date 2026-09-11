@@ -7,6 +7,7 @@
 //
 
 #import "Utils.h"
+#import "NetworkPathMonitor.h"
 
 #import <Network/Network.h>
 #import <QuartzCore/QuartzCore.h>
@@ -74,6 +75,11 @@ static const CFTimeInterval kWiFiCacheTTLSeconds = 5.0;
 }
 
 + (BOOL)isActiveNetworkWiFi {
+    NetworkPathMonitor *pathMonitor = [NetworkPathMonitor sharedMonitor];
+    if (pathMonitor.hasPath) {
+        return pathMonitor.isWiFi;
+    }
+    
     CFTimeInterval now = CACurrentMediaTime();
     if (s_wifiCacheValid && (now - s_wifiCacheAt) < kWiFiCacheTTLSeconds) {
         return s_wifiCacheValue;
@@ -109,7 +115,8 @@ static const CFTimeInterval kWiFiCacheTTLSeconds = 5.0;
               packetSize:(int*)packetSize
                    isVPN:(BOOL)isVPN
             isPrivateLAN:(BOOL)isPrivateLAN
-                  isWiFi:(BOOL)isWiFi {
+                  isWiFi:(BOOL)isWiFi
+   aggressiveWifiPackets:(BOOL)aggressiveWifiPackets {
     if (streamingRemotely == NULL || packetSize == NULL) {
         return;
     }
@@ -119,7 +126,12 @@ static const CFTimeInterval kWiFiCacheTTLSeconds = 5.0;
     }
     else if (isPrivateLAN) {
         *streamingRemotely = STREAM_CFG_LOCAL;
-        *packetSize = isWiFi ? 1024 : 1392;
+        if (isWiFi) {
+            *packetSize = aggressiveWifiPackets ? 1392 : 1024;
+        }
+        else {
+            *packetSize = 1392;
+        }
     }
     else {
         *streamingRemotely = STREAM_CFG_AUTO;

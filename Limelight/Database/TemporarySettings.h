@@ -34,6 +34,8 @@
 @property (nonatomic) BOOL enableHdr;
 @property (nonatomic) BOOL btMouseSupport;
 @property (nonatomic) BOOL absoluteTouchMode;
+@property (nonatomic) BOOL aggressiveWifiPackets;
+@property (nonatomic) BOOL disableEncryptionOnLan;
 @property (nonatomic) MLStatsOverlayLevel statsOverlayLevel;
 
 - (id) initFromSettings:(Settings*)settings;

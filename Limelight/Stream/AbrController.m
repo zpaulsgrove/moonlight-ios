@@ -2,16 +2,20 @@
 //  AbrController.m
 //  Moonlight
 //
-//  Local ABR driven by network drops / RTT variance via Vibepollo /bitrate.
+//  Local ABR driven by network drops / RTT / FEC / queue latency.
+//  Applies via Vibepollo /bitrate when available; otherwise drives renderer pressure.
 //
 
 #import "AbrController.h"
 #import "HttpManager.h"
 #import "Utils.h"
 #import "AbrBitrateHelpers.h"
+#import "NetworkPathMonitor.h"
+#import "VideoDecoderRenderer.h"
 
 #include <Limelight.h>
 #include <os/log.h>
+#import <QuartzCore/QuartzCore.h>
 
 static os_log_t AbrPerfLog(void)
 {
@@ -26,15 +30,24 @@ static os_log_t AbrPerfLog(void)
 @implementation AbrController {
     StreamConfiguration* _config;
     __weak Connection* _connection;
+    __weak VideoDecoderRenderer* _renderer;
     HttpManager* _http;
     NSTimer* _timer;
     NSInteger _ceilingKbps;
     NSInteger _floorKbps;
     NSInteger _currentKbps;
-    BOOL _supported;
+    BOOL _hostAbrSupported;
+    BOOL _localAdaptationActive;
+    BOOL _connectionPoor;
+    BOOL _pathConstrained;
     int _stableTicks;
     NSInteger _generation;
     BOOL _applyInFlight;
+    uint32_t _lastFecRecoveredFrames;
+    BOOL _hasFecBaseline;
+    uint64_t _lastBytesReceived;
+    CFTimeInterval _lastBytesAt;
+    BOOL _hasBytesBaseline;
 }
 
 - (instancetype)initWithConfig:(StreamConfiguration*)config
@@ -53,6 +66,10 @@ static os_log_t AbrPerfLog(void)
     return self;
 }
 
+- (void)attachRenderer:(VideoDecoderRenderer*)renderer {
+    _renderer = renderer;
+}
+
 + (NSInteger)clampBitrate:(NSInteger)candidate ceiling:(NSInteger)ceiling floor:(NSInteger)floor {
     return MLClampBitrate(candidate, ceiling, floor);
 }
@@ -61,18 +78,49 @@ static os_log_t AbrPerfLog(void)
                             ceiling:(NSInteger)ceiling
                               floor:(NSInteger)floor
                      dropRatePercent:(float)dropRatePercent
-                        rttVarianceMs:(uint32_t)rttVarianceMs {
-    return MLNextAbrBitrate(current, ceiling, floor, dropRatePercent, rttVarianceMs);
+                        rttVarianceMs:(uint32_t)rttVarianceMs
+                 fecRepairRatePercent:(float)fecRepairRatePercent
+                       queueLatencyMs:(float)queueLatencyMs
+                       connectionPoor:(BOOL)connectionPoor {
+    return MLNextAbrBitrate(current, ceiling, floor, dropRatePercent, rttVarianceMs,
+                            fecRepairRatePercent, queueLatencyMs, connectionPoor);
+}
+
+- (void)noteConnectionStatus:(int)status {
+    _connectionPoor = (status == CONN_STATUS_POOR);
 }
 
 - (void)start {
-    // Default-on for non-VPN sessions when the host exposes ABR capabilities
     if ([Utils isActiveNetworkVPN]) {
         Log(LOG_I, @"ABR disabled on VPN path");
         return;
     }
     
     NSInteger gen = _generation;
+    NetworkPathMonitor *pathMonitor = [NetworkPathMonitor sharedMonitor];
+    _pathConstrained = pathMonitor.hasPath && (pathMonitor.isConstrained || pathMonitor.isExpensive);
+    __weak AbrController *weakSelf = self;
+    [pathMonitor addObserver:self handler:^(NetworkPathMonitor *monitor) {
+        AbrController *strongSelf = weakSelf;
+        if (strongSelf == nil) {
+            return;
+        }
+        strongSelf->_pathConstrained = monitor.isConstrained || monitor.isExpensive;
+    }];
+    
+    // Local adaptation always runs (host apply is optional).
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (gen != self->_generation) {
+            return;
+        }
+        self->_localAdaptationActive = YES;
+        [self->_timer invalidate];
+        self->_timer = [NSTimer scheduledTimerWithTimeInterval:0.5
+                                                        target:self
+                                                      selector:@selector(tick)
+                                                      userInfo:nil
+                                                       repeats:YES];
+    });
     
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         if (gen != self->_generation) {
@@ -81,7 +129,7 @@ static os_log_t AbrPerfLog(void)
         
         BOOL ok = [self->_http probeAbrCapabilities];
         if (!ok) {
-            Log(LOG_I, @"ABR unavailable on host (no /api/abr/capabilities)");
+            Log(LOG_I, @"Host ABR unavailable; using local pressure fallback");
             return;
         }
         
@@ -89,35 +137,36 @@ static os_log_t AbrPerfLog(void)
             return;
         }
         
-        Log(LOG_I, @"ABR enabled (local controller, ceiling %ld kbps, floor %ld kbps)",
+        Log(LOG_I, @"Host ABR enabled (ceiling %ld kbps, floor %ld kbps)",
             (long)self->_ceilingKbps, (long)self->_floorKbps);
         
         dispatch_async(dispatch_get_main_queue(), ^{
             if (gen != self->_generation) {
                 return;
             }
-            
-            self->_supported = YES;
-            [self->_timer invalidate];
-            self->_timer = [NSTimer scheduledTimerWithTimeInterval:0.5
-                                                            target:self
-                                                          selector:@selector(tick)
-                                                          userInfo:nil
-                                                           repeats:YES];
+            self->_hostAbrSupported = YES;
         });
     });
 }
 
 - (void)stop {
     _generation++;
-    _supported = NO;
+    _hostAbrSupported = NO;
+    _localAdaptationActive = NO;
     _applyInFlight = NO;
+    _connectionPoor = NO;
+    _pathConstrained = NO;
+    _hasFecBaseline = NO;
+    _hasBytesBaseline = NO;
+    [[NetworkPathMonitor sharedMonitor] removeObserver:self];
+    VideoDecoderRenderer *renderer = _renderer;
+    renderer.networkPressureMode = NO;
     [_timer invalidate];
     _timer = nil;
 }
 
 - (BOOL)isActive {
-    return _supported;
+    return _hostAbrSupported;
 }
 
 - (NSInteger)currentBitrateKbps {
@@ -125,7 +174,7 @@ static os_log_t AbrPerfLog(void)
 }
 
 - (void)tick {
-    if (!_supported || _applyInFlight) {
+    if (!_localAdaptationActive || _applyInFlight) {
         return;
     }
     
@@ -145,10 +194,60 @@ static os_log_t AbrPerfLog(void)
     }
     
     float dropRatePercent = MLDropRatePercent(stats.networkDroppedFrames, stats.totalFrames);
+    float queueLatencyMs = MLAvgQueueLatencyMs(stats.totalClientQueueLatencyMs,
+                                               stats.framesWithClientQueueLatency);
+    
     uint32_t rtt = 0, variance = 0;
     LiGetEstimatedRttInfo(&rtt, &variance);
     
-    NSInteger next = MLNextAbrBitrate(_currentKbps, _ceilingKbps, _floorKbps, dropRatePercent, variance);
+    float fecRepairRatePercent = 0.0f;
+    uint32_t fecRecoveredPackets = 0, fecRecoveredFrames = 0, fecFailedFrames = 0;
+    if (LiGetVideoFecStats(&fecRecoveredPackets, &fecRecoveredFrames, &fecFailedFrames)) {
+        if (_hasFecBaseline) {
+            uint32_t deltaRecovered = 0;
+            if (fecRecoveredFrames >= _lastFecRecoveredFrames) {
+                deltaRecovered = fecRecoveredFrames - _lastFecRecoveredFrames;
+            }
+            fecRepairRatePercent = MLFecRepairRatePercent(deltaRecovered, (uint32_t)MAX(stats.totalFrames, 0));
+        }
+        _lastFecRecoveredFrames = fecRecoveredFrames;
+        _hasFecBaseline = YES;
+    }
+    
+    double goodputKbps = -1.0;
+    uint64_t bytesReceived = 0;
+    CFTimeInterval now = CACurrentMediaTime();
+    if (LiGetVideoBytesReceived(&bytesReceived)) {
+        if (_hasBytesBaseline && now > _lastBytesAt) {
+            double dt = now - _lastBytesAt;
+            if (dt >= 0.2 && bytesReceived >= _lastBytesReceived) {
+                goodputKbps = ((double)(bytesReceived - _lastBytesReceived) * 8.0 / 1000.0) / dt;
+            }
+        }
+        _lastBytesReceived = bytesReceived;
+        _lastBytesAt = now;
+        _hasBytesBaseline = YES;
+    }
+    
+    BOOL poor = _connectionPoor || _pathConstrained;
+    // Sustained goodput well below target with any loss is treated as congestion.
+    if (goodputKbps >= 0.0 && _currentKbps > 0 &&
+        goodputKbps < (double)_currentKbps * 0.50 && dropRatePercent > 0.5f) {
+        poor = YES;
+    }
+    
+    NSInteger next = MLNextAbrBitrate(_currentKbps, _ceilingKbps, _floorKbps,
+                                      dropRatePercent, variance,
+                                      fecRepairRatePercent, queueLatencyMs, poor);
+    
+    BOOL wantsCut = next < _currentKbps;
+    BOOL pressure = wantsCut || _connectionPoor || _pathConstrained;
+    VideoDecoderRenderer *renderer = _renderer;
+    if (renderer != nil && renderer.networkPressureMode != pressure) {
+        renderer.networkPressureMode = pressure;
+        os_log(AbrPerfLog(), "event=abr_pressure on=%{public}d hostAbr=%{public}d",
+               pressure ? 1 : 0, _hostAbrSupported ? 1 : 0);
+    }
     
     if (next == _currentKbps) {
         _stableTicks++;
@@ -156,7 +255,21 @@ static os_log_t AbrPerfLog(void)
     }
     
     // Avoid tiny jittery adjustments
-    if (labs(next - _currentKbps) < MAX(_ceilingKbps / 100, 500) && dropRatePercent < 2.0f) {
+    if (labs(next - _currentKbps) < MAX(_ceilingKbps / 100, 500) && dropRatePercent < 2.0f && !poor) {
+        return;
+    }
+    
+    if (!_hostAbrSupported) {
+        // Shadow bitrate for overlay/stats; host cannot be retargeted without ABR API.
+        NSInteger prev = _currentKbps;
+        _currentKbps = next;
+        _stableTicks = 0;
+        Log(LOG_I, @"Local ABR shadow %ld -> %ld kbps (drops=%.2f%% fec=%.2f%% q=%.1f poor=%d)",
+            (long)prev, (long)next, dropRatePercent, fecRepairRatePercent, queueLatencyMs, poor ? 1 : 0);
+        os_log(AbrPerfLog(),
+               "event=abr_local kbps=%{public}ld prev=%{public}ld drop=%.2f fec=%.2f q=%.1f var=%{public}u poor=%{public}d goodput=%.0f",
+               (long)next, (long)prev, dropRatePercent, fecRepairRatePercent, queueLatencyMs,
+               variance, poor ? 1 : 0, goodputKbps);
         return;
     }
     
@@ -175,11 +288,12 @@ static os_log_t AbrPerfLog(void)
             if (applied) {
                 NSInteger prev = self->_currentKbps;
                 self->_currentKbps = target;
-                Log(LOG_I, @"ABR set bitrate to %ld kbps (drops=%.2f%% rttVar=%u)",
-                    (long)target, dropRatePercent, variance);
+                Log(LOG_I, @"ABR set bitrate to %ld kbps (drops=%.2f%% fec=%.2f%% q=%.1f rttVar=%u)",
+                    (long)target, dropRatePercent, fecRepairRatePercent, queueLatencyMs, variance);
                 os_log(AbrPerfLog(),
-                            "event=abr kbps=%{public}ld prev=%{public}ld drop=%.2f var=%{public}u",
-                            (long)target, (long)prev, dropRatePercent, variance);
+                       "event=abr kbps=%{public}ld prev=%{public}ld drop=%.2f fec=%.2f q=%.1f var=%{public}u goodput=%.0f",
+                       (long)target, (long)prev, dropRatePercent, fecRepairRatePercent,
+                       queueLatencyMs, variance, goodputKbps);
             }
             else {
                 Log(LOG_W, @"ABR bitrate apply failed for %ld kbps; keeping %ld kbps",

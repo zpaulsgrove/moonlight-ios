@@ -12,6 +12,7 @@
 #import "Utils.h"
 #import "AbrController.h"
 #import "AbrBitrateHelpers.h"
+#import "NetworkPathMonitor.h"
 
 #import "StreamView.h"
 #import "ServerInfoResponse.h"
@@ -132,7 +133,8 @@
     
     // Initializing the renderer must be done on the main thread
     dispatch_async(dispatch_get_main_queue(), ^{
-        // Fresh Wi-Fi probe once per stream; Connection + AbrController reuse the cache.
+        // Live path monitor for the stream session; Utils prefers it when hasPath is set.
+        [[NetworkPathMonitor sharedMonitor] start];
         [Utils invalidateActiveNetworkWiFiCache];
         (void)[Utils isActiveNetworkWiFi];
         
@@ -140,6 +142,7 @@
         self->_renderer = renderer;
         self->_connection = [[Connection alloc] initWithConfig:self->_config renderer:renderer connectionCallbacks:self->_callbacks];
         self->_abrController = [[AbrController alloc] initWithConfig:self->_config connection:self->_connection];
+        [self->_abrController attachRenderer:renderer];
         NSOperationQueue* opQueue = [[NSOperationQueue alloc] init];
         [opQueue addOperation:self->_connection];
         // Start ABR after the connection object exists; it probes the host asynchronously
@@ -152,14 +155,16 @@
         });
         // Default level so lines persist into device log archives (Info often does not).
         os_log(perfLog,
-                    "event=stream_start res=%{public}dx%{public}d fps=%{public}d bitrate=%{public}d pacing=%{public}d wifi=%{public}d hdrReq=%{public}d",
+                    "event=stream_start res=%{public}dx%{public}d fps=%{public}d bitrate=%{public}d pacing=%{public}d wifi=%{public}d hdrReq=%{public}d aggressivePkt=%{public}d lanClear=%{public}d",
                     self->_config.width,
                     self->_config.height,
                     self->_config.frameRate,
                     self->_config.bitRate,
                     self->_config.useFramePacing ? 1 : 0,
                     [Utils isActiveNetworkWiFi] ? 1 : 0,
-                    (self->_config.supportedVideoFormats & VIDEO_FORMAT_MASK_10BIT) ? 1 : 0);
+                    (self->_config.supportedVideoFormats & VIDEO_FORMAT_MASK_10BIT) ? 1 : 0,
+                    self->_config.aggressiveWifiPackets ? 1 : 0,
+                    self->_config.disableEncryptionOnLan ? 1 : 0);
     });
 }
 
@@ -169,6 +174,12 @@
     _abrController = nil;
     [_connection terminate];
     _renderer = nil;
+    [[NetworkPathMonitor sharedMonitor] stop];
+}
+
+- (void) connectionStatusUpdate:(int)status
+{
+    [_abrController noteConnectionStatus:status];
 }
 
 - (BOOL) launchApp:(HttpManager*)hMan receiveSessionUrl:(NSString**)sessionUrl {

@@ -350,13 +350,16 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     // bout so recovery does not immediately thrash again. Frame pacing drains in order and
     // never soft-drops.
     static const int kSoftDropPendingThreshold = 2;
+    static const int kSoftDropPendingThresholdPressure = 1;
     static const uint64_t kSoftDropIdrCooldownoldownMs = 1500;
     
     int pendingFrames = LiGetPendingVideoFrames();
     NotePendingPeak(&_maxPendingFrames, pendingFrames);
     BOOL cooldownActive = nowMs < _softDropIdrCooldownoldownUntilMs;
+    int softDropThreshold = self.networkPressureMode ? kSoftDropPendingThresholdPressure
+                                                     : kSoftDropPendingThreshold;
     BOOL dropForNewest = !framePacing && !isIdr && !cooldownActive &&
-                         pendingFrames >= kSoftDropPendingThreshold;
+                         pendingFrames >= softDropThreshold;
     BOOL dropBrokenChain = !framePacing && !isIdr && _arrivalDecodeChainBroken;
     BOOL drop = dropForNewest || dropBrokenChain;
     

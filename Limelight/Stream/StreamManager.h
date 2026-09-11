@@ -16,6 +16,9 @@
 
 - (void) stopStream;
 
+// Forward CONN_STATUS_* into the ABR / local-pressure controller.
+- (void) connectionStatusUpdate:(int)status;
+
 - (NSString*) getStatsOverlayTextForLevel:(MLStatsOverlayLevel)level;
 
 // Emits one structured os_log line (subsystem com.moonlight-stream.Moonlight, category perf)

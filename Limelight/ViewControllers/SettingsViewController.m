@@ -13,6 +13,11 @@
 #import <VideoToolbox/VideoToolbox.h>
 #import <AVFoundation/AVFoundation.h>
 
+@interface SettingsViewController ()
+@property (nonatomic, strong) UISegmentedControl *aggressiveWifiPacketsSelector;
+@property (nonatomic, strong) UISegmentedControl *disableEncryptionOnLanSelector;
+@end
+
 @implementation SettingsViewController {
     NSInteger _bitrate;
     NSInteger _lastSelectedResolutionIndex;
@@ -295,6 +300,66 @@ BOOL isCustomResolution(CGSize res) {
     [self.bitrateSlider addTarget:self action:@selector(bitrateSliderMoved) forControlEvents:UIControlEventValueChanged];
     [self updateBitrateText];
     [self updateResolutionDisplayViewText];
+    [self addExtraStreamSettingControlsWithSettings:currentSettings];
+}
+
+- (void)addExtraStreamSettingControlsWithSettings:(TemporarySettings *)currentSettings {
+    if (self.aggressiveWifiPacketsSelector != nil) {
+        self.aggressiveWifiPacketsSelector.selectedSegmentIndex = currentSettings.aggressiveWifiPackets ? 1 : 0;
+        self.disableEncryptionOnLanSelector.selectedSegmentIndex = currentSettings.disableEncryptionOnLan ? 1 : 0;
+        return;
+    }
+    
+    UIColor *labelColor = [UIColor colorWithRed:0.939 green:0.963 blue:1.0 alpha:1.0];
+    UIColor *tintColor = [UIColor colorWithRed:0.672 green:0.617 blue:0.999 alpha:1.0];
+    
+    CGRect anchorFrame = self.statsOverlaySelector.frame;
+    CGFloat controlWidth = anchorFrame.size.width;
+    CGFloat controlX = anchorFrame.origin.x;
+    CGFloat labelX = controlX + 6;
+    CGFloat y = CGRectGetMaxY(anchorFrame) + 40;
+    
+    UILabel *wifiLabel = [[UILabel alloc] initWithFrame:CGRectMake(labelX, y, controlWidth - 6, 21)];
+    wifiLabel.text = @"Larger Wi-Fi Packets";
+    wifiLabel.font = [UIFont boldSystemFontOfSize:17];
+    wifiLabel.textColor = labelColor;
+    [self.scrollView addSubview:wifiLabel];
+    
+    self.aggressiveWifiPacketsSelector = [[UISegmentedControl alloc] initWithItems:@[@"No", @"Yes"]];
+    self.aggressiveWifiPacketsSelector.frame = CGRectMake(controlX, y + 29, controlWidth, 28);
+    self.aggressiveWifiPacketsSelector.selectedSegmentIndex = currentSettings.aggressiveWifiPackets ? 1 : 0;
+    self.aggressiveWifiPacketsSelector.tintColor = tintColor;
+    if (@available(iOS 13.0, *)) {
+        self.aggressiveWifiPacketsSelector.selectedSegmentTintColor = tintColor;
+    }
+    self.aggressiveWifiPacketsSelector.accessibilityLabel = @"Larger Wi-Fi Packets";
+    self.aggressiveWifiPacketsSelector.accessibilityHint = @"Uses 1392-byte packets on LAN Wi-Fi. May fragment on poor RF.";
+    [self.scrollView addSubview:self.aggressiveWifiPacketsSelector];
+    
+    y = CGRectGetMaxY(self.aggressiveWifiPacketsSelector.frame) + 36;
+    
+    UILabel *encryptionLabel = [[UILabel alloc] initWithFrame:CGRectMake(labelX, y, controlWidth - 6, 21)];
+    encryptionLabel.text = @"Disable Encryption on LAN";
+    encryptionLabel.font = [UIFont boldSystemFontOfSize:17];
+    encryptionLabel.textColor = labelColor;
+    [self.scrollView addSubview:encryptionLabel];
+    
+    self.disableEncryptionOnLanSelector = [[UISegmentedControl alloc] initWithItems:@[@"No", @"Yes"]];
+    self.disableEncryptionOnLanSelector.frame = CGRectMake(controlX, y + 29, controlWidth, 28);
+    self.disableEncryptionOnLanSelector.selectedSegmentIndex = currentSettings.disableEncryptionOnLan ? 1 : 0;
+    self.disableEncryptionOnLanSelector.tintColor = tintColor;
+    if (@available(iOS 13.0, *)) {
+        self.disableEncryptionOnLanSelector.selectedSegmentTintColor = tintColor;
+    }
+    self.disableEncryptionOnLanSelector.accessibilityLabel = @"Disable Encryption on LAN";
+    [self.scrollView addSubview:self.disableEncryptionOnLanSelector];
+    
+    CGFloat bottom = CGRectGetMaxY(self.disableEncryptionOnLanSelector.frame) + 40;
+    if (self.scrollView.contentSize.height < bottom) {
+        CGSize size = self.scrollView.contentSize;
+        size.height = bottom;
+        self.scrollView.contentSize = size;
+    }
 }
 
 - (void) touchModeChanged {
@@ -586,6 +651,10 @@ BOOL isCustomResolution(CGSize res) {
     BOOL absoluteTouchMode = [self.touchModeSelector selectedSegmentIndex] == 1;
     MLStatsOverlayLevel statsOverlayLevel = [self getChosenStatsOverlayLevel];
     BOOL enableHdr = [self.hdrSelector selectedSegmentIndex] == 1;
+    BOOL aggressiveWifiPackets = self.aggressiveWifiPacketsSelector != nil &&
+        [self.aggressiveWifiPacketsSelector selectedSegmentIndex] == 1;
+    BOOL disableEncryptionOnLan = self.disableEncryptionOnLanSelector != nil &&
+        [self.disableEncryptionOnLanSelector selectedSegmentIndex] == 1;
     [dataMan saveSettingsWithBitrate:_bitrate
                            framerate:framerate
                               height:height
@@ -601,7 +670,9 @@ BOOL isCustomResolution(CGSize res) {
                            enableHdr:enableHdr
                       btMouseSupport:btMouseSupport
                    absoluteTouchMode:absoluteTouchMode
-                   statsOverlayLevel:statsOverlayLevel];
+                   statsOverlayLevel:statsOverlayLevel
+               aggressiveWifiPackets:aggressiveWifiPackets
+              disableEncryptionOnLan:disableEncryptionOnLan];
 }
 
 - (MLStatsOverlayLevel) getChosenStatsOverlayLevel {

@@ -10,6 +10,9 @@
 		A1B2C3D4E5F60718293A4B13 /* AbrBitrateHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B11 /* AbrBitrateHelpers.m */; };
 		A1B2C3D4E5F60718293A4B14 /* AbrBitrateHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B11 /* AbrBitrateHelpers.m */; };
 		A1B2C3D4E5F60718293A4B15 /* AbrBitrateHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B11 /* AbrBitrateHelpers.m */; };
+		A1B2C3D4E5F60718293A4B1F /* NetworkPathMonitor.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B1D /* NetworkPathMonitor.m */; };
+		A1B2C3D4E5F60718293A4B20 /* NetworkPathMonitor.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B1D /* NetworkPathMonitor.m */; };
+		A1B2C3D4E5F60718293A4B21 /* NetworkPathMonitor.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B1D /* NetworkPathMonitor.m */; };
 		A1B2C3D4E5F60718293A4B16 /* AnnexBHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B05 /* AnnexBHelpers.m */; };
 		B7C1D2E3F4A5061728394504 /* StatsOverlayFormatting.m in Sources */ = {isa = PBXBuildFile; fileRef = B7C1D2E3F4A5061728394503 /* StatsOverlayFormatting.m */; };
 		B7C1D2E3F4A5061728394505 /* StatsOverlayFormatting.m in Sources */ = {isa = PBXBuildFile; fileRef = B7C1D2E3F4A5061728394503 /* StatsOverlayFormatting.m */; };
@@ -193,6 +196,8 @@
 /* Begin PBXFileReference section */
 		A1B2C3D4E5F60718293A4B11 /* AbrBitrateHelpers.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AbrBitrateHelpers.m; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B12 /* AbrBitrateHelpers.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AbrBitrateHelpers.h; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B1D /* NetworkPathMonitor.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = NetworkPathMonitor.m; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B1E /* NetworkPathMonitor.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NetworkPathMonitor.h; sourceTree = "<group>"; };
 		B7C1D2E3F4A5061728394502 /* StatsOverlayFormatting.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = StatsOverlayFormatting.h; sourceTree = "<group>"; };
 		B7C1D2E3F4A5061728394503 /* StatsOverlayFormatting.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = StatsOverlayFormatting.m; sourceTree = "<group>"; };
 		B7C1D2E3F4A5061728394507 /* MoonlightStatsOverlayTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MoonlightStatsOverlayTests.m; sourceTree = "<group>"; };
@@ -231,6 +236,7 @@
 		986E28A528EA989100758361 /* Moonlight v1.9.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.9.xcdatamodel"; sourceTree = "<group>"; };
 		9874E8962AE95E1D00130A3C /* Moonlight v1.10.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.10.xcdatamodel"; sourceTree = "<group>"; };
 		B7C1D2E3F4A5061728394501 /* Moonlight v1.11.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.11.xcdatamodel"; sourceTree = "<group>"; };
+		C8D2E3F4A5B60718293A4503 /* Moonlight v1.12.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.12.xcdatamodel"; sourceTree = "<group>"; };
 		98783FEA242EAC5D00F00EF4 /* Moonlight v1.5.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.5.xcdatamodel"; sourceTree = "<group>"; };
 		98882A032AF60F5300C5A11C /* libavcodec.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libavcodec.a; path = libs/FFmpeg/lib/iOS/libavcodec.a; sourceTree = "<group>"; };
 		98882A042AF60F5300C5A11C /* libavutil.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libavutil.a; path = libs/FFmpeg/lib/iOS/libavutil.a; sourceTree = "<group>"; };
@@ -610,6 +616,8 @@
 			children = (
 				FB89462119F646E200339C8A /* Utils.h */,
 				FB89462219F646E200339C8A /* Utils.m */,
+				A1B2C3D4E5F60718293A4B1E /* NetworkPathMonitor.h */,
+				A1B2C3D4E5F60718293A4B1D /* NetworkPathMonitor.m */,
 				A1B2C3D4E5F60718293A4B06 /* AnnexBHelpers.h */,
 				A1B2C3D4E5F60718293A4B05 /* AnnexBHelpers.m */,
 				A1B2C3D4E5F60718293A4B12 /* AbrBitrateHelpers.h */,
@@ -945,6 +953,7 @@
 				9865DC31213260F10005B9B9 /* mkcert.c in Sources */,
 				FB1A67E32132498A00507771 /* Limelight.xcdatamodeld in Sources */,
 				FB1A67DE2132460A00507771 /* Utils.m in Sources */,
+				A1B2C3D4E5F60718293A4B20 /* NetworkPathMonitor.m in Sources */,
 				FB1A67E02132460A00507771 /* Logger.m in Sources */,
 				FB1A67D52132460400507771 /* ControllerSupport.m in Sources */,
 				FB1A67D82132460400507771 /* StreamView.m in Sources */,
@@ -998,6 +1007,7 @@
 				FB290D0419B2C406004C83CF /* AppDelegate.m in Sources */,
 				FB9AFD401A7E127D00872C98 /* AppListResponse.m in Sources */,
 				FB89463419F646E200339C8A /* Utils.m in Sources */,
+				A1B2C3D4E5F60718293A4B1F /* NetworkPathMonitor.m in Sources */,
 				FBDE86E619F82297001C18A8 /* UIAppView.m in Sources */,
 				FB89462F19F646E200339C8A /* Connection.m in Sources */,
 				A1B2C3D4E5F60718293A4B03 /* AbrController.m in Sources */,
@@ -1060,6 +1070,7 @@
 				B7C1D2E3F4A5061728394509 /* HdrMetadataHelpers.m in Sources */,
 				A1B2C3D4E5F60718293A4B16 /* AnnexBHelpers.m in Sources */,
 				A1B2C3D4E5F60718293A4B17 /* Utils.m in Sources */,
+				A1B2C3D4E5F60718293A4B21 /* NetworkPathMonitor.m in Sources */,
 				A1B2C3D4E5F60718293A4B18 /* Logger.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1564,6 +1575,7 @@
 		FB290D0519B2C406004C83CF /* Limelight.xcdatamodeld */ = {
 			isa = XCVersionGroup;
 			children = (
+				C8D2E3F4A5B60718293A4503 /* Moonlight v1.12.xcdatamodel */,
 				B7C1D2E3F4A5061728394501 /* Moonlight v1.11.xcdatamodel */,
 				9874E8962AE95E1D00130A3C /* Moonlight v1.10.xcdatamodel */,
 				986E28A528EA989100758361 /* Moonlight v1.9.xcdatamodel */,
@@ -1581,7 +1593,7 @@
 				FB4678F21A51BDCB00377732 /* Limelight 0.3.0.xcdatamodel */,
 				FB290D0619B2C406004C83CF /* Limelight.xcdatamodel */,
 			);
-			currentVersion = B7C1D2E3F4A5061728394501 /* Moonlight v1.11.xcdatamodel */;
+			currentVersion = C8D2E3F4A5B60718293A4503 /* Moonlight v1.12.xcdatamodel */;
 			path = Limelight.xcdatamodeld;
 			sourceTree = "<group>";
 			versionGroupType = wrapper.xcdatamodel;

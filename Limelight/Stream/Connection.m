@@ -468,15 +468,25 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
     // Since we require iOS 17 or above, we're guaranteed to be running
     // on a 64-bit device with ARMv8 crypto instructions, so we don't
     // need to check for that here.
-    _streamConfig.encryptionFlags = ENCFLG_ALL;
+    BOOL isVPN = [Utils isActiveNetworkVPN];
+    BOOL isPrivateLAN = [Utils isPrivateAddress:rawAddress];
+    // Optional LAN cleartext: only on private LAN and never over VPN.
+    if (config.disableEncryptionOnLan && isPrivateLAN && !isVPN) {
+        _streamConfig.encryptionFlags = ENCFLG_NONE;
+        Log(LOG_W, @"Stream encryption disabled on private LAN (user setting)");
+    }
+    else {
+        _streamConfig.encryptionFlags = ENCFLG_ALL;
+    }
     
     int streamingRemotely = STREAM_CFG_AUTO;
     int packetSize = 1024;
     [Utils streamRemoteMode:&streamingRemotely
                  packetSize:&packetSize
-                      isVPN:[Utils isActiveNetworkVPN]
-               isPrivateLAN:[Utils isPrivateAddress:rawAddress]
-                     isWiFi:[Utils isActiveNetworkWiFi]];
+                      isVPN:isVPN
+               isPrivateLAN:isPrivateLAN
+                     isWiFi:[Utils isActiveNetworkWiFi]
+      aggressiveWifiPackets:config.aggressiveWifiPackets];
     _streamConfig.streamingRemotely = streamingRemotely;
     _streamConfig.packetSize = packetSize;
 
@@ -490,6 +500,7 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
     _drCallbacks.start = DrStart;
     _drCallbacks.stop = DrStop;
     _drCallbacks.capabilities = CAPABILITY_PULL_RENDERER |
+                                CAPABILITY_REFERENCE_FRAME_INVALIDATION_AVC |
                                 CAPABILITY_REFERENCE_FRAME_INVALIDATION_HEVC |
                                 CAPABILITY_REFERENCE_FRAME_INVALIDATION_AV1 |
                                 CAPABILITY_SLICES_PER_FRAME(4);

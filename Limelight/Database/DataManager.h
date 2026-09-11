@@ -28,7 +28,9 @@
                        enableHdr:(BOOL)enableHdr
                   btMouseSupport:(BOOL)btMouseSupport
                absoluteTouchMode:(BOOL)absoluteTouchMode
-               statsOverlayLevel:(MLStatsOverlayLevel)statsOverlayLevel;
+               statsOverlayLevel:(MLStatsOverlayLevel)statsOverlayLevel
+           aggressiveWifiPackets:(BOOL)aggressiveWifiPackets
+          disableEncryptionOnLan:(BOOL)disableEncryptionOnLan;
 
 - (NSArray*) getHosts;
 - (void) updateHost:(TemporaryHost*)host;
