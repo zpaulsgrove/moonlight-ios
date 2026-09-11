@@ -10,6 +10,10 @@
 #import "StreamView.h"
 #import "AnnexBHelpers.h"
 #import "HdrMetadataHelpers.h"
+#import "SoftDropHelpers.h"
+
+#import <QuartzCore/QuartzCore.h>
+#import "Av1FormatDescCache.h"
 
 void DrNoteClientQueueAgeMs(uint64_t ageMs);
 
@@ -84,22 +88,29 @@ static void NotePendingPeak(atomic_int *peak, int pending)
     NSData *masteringDisplayColorVolume;
     NSData *contentLightLevelInfo;
     CMVideoFormatDescriptionRef formatDesc;
+    Av1FormatDescCache *_av1FormatDescCache;
     uint64_t _shownGeneration;
     
     CADisplayLink* _displayLink;
     BOOL framePacing;
     
-    // Arrival-path soft-drop skips P-frames without decoding them. Until an IDR is enqueued,
-    // later P-frames would paint as corruption, so we refuse them and request one IDR for the
-    // whole streak rather than one per skipped frame.
+    // Soft-drop skips P-frames without decoding them. Until an IDR is enqueued (or RFI
+    // recovers a later frame), later P-frames would paint as corruption, so we refuse them
+    // and request one recovery for the whole streak rather than one per skipped frame.
     BOOL _arrivalDecodeChainBroken;
     BOOL _arrivalIdrRequestedForSoftDrop;
-    // After a soft-drop IDR recovers, pause drop-to-newest briefly. Otherwise continuous
-    // pending>=N at 120 fps re-enters soft-drop and hammers the host with IDRs.
+    // After a soft-drop IDR recovers, pause backlog/age soft-drop briefly so pending frames
+    // do not immediately restart keyframe/RFI storms.
     uint64_t _softDropIdrCooldownoldownUntilMs;
+    // When RFI handled soft-drops, clear the broken chain once a later frame
+    // (frameNumber > latest dropped) enqueues successfully, or when an IDR enqueues.
+    BOOL _rfiSoftDropRecoveryPending;
+    int _rfiSoftDroppedFrameNumber;
     
     NSThread* _renderThread;
     dispatch_semaphore_t _renderThreadExited;
+    // Pace thread only: CFRunLoop that owns CADisplayLink (not main).
+    CFRunLoopRef _paceRunLoop;
     atomic_bool _stopping;
     BOOL _stopped;
     
@@ -170,6 +181,7 @@ static void NotePendingPeak(atomic_int *peak, int pending)
         CFRelease(formatDesc);
         formatDesc = NULL;
     }
+    [_av1FormatDescCache invalidate];
     [parameterSetBuffers removeAllObjects];
 }
 
@@ -220,6 +232,7 @@ static void NotePendingPeak(atomic_int *peak, int pending)
     atomic_init(&_maxPendingFrames, 0);
     
     parameterSetBuffers = [[NSMutableArray alloc] init];
+    _av1FormatDescCache = [[Av1FormatDescCache alloc] init];
     
     [self createDisplayLayer];
     
@@ -251,20 +264,49 @@ static void NotePendingPeak(atomic_int *peak, int pending)
     _arrivalDecodeChainBroken = NO;
     _arrivalIdrRequestedForSoftDrop = NO;
     _softDropIdrCooldownoldownUntilMs = 0;
+    _rfiSoftDropRecoveryPending = NO;
+    _rfiSoftDroppedFrameNumber = 0;
     
+    // Dedicated UserInteractive thread for both drivers so Annex-B rewrite / enqueue never
+    // contend with the main run loop. Layer create/reveal stays on main.
     if (framePacing) {
-        _displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(displayLinkCallback:)];
-        _displayLink.preferredFrameRateRange = CAFrameRateRangeMake(self->frameRate, self->frameRate, self->frameRate);
-        [_displayLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
+        _paceRunLoop = NULL;
+        _renderThread = [[NSThread alloc] initWithTarget:self selector:@selector(paceThreadMain) object:nil];
+        _renderThread.name = @"Moonlight video pace";
     }
     else {
         // A real thread rather than a dispatch queue: the loop blocks in
         // LiWaitForNextVideoFrame and would otherwise occupy a cooperative pool thread.
         _renderThread = [[NSThread alloc] initWithTarget:self selector:@selector(renderThreadMain) object:nil];
         _renderThread.name = @"Moonlight video render";
-        _renderThread.qualityOfService = NSQualityOfServiceUserInteractive;
-        [_renderThread start];
     }
+    _renderThread.qualityOfService = NSQualityOfServiceUserInteractive;
+    [_renderThread start];
+}
+
+// CADisplayLink must be added to this thread's run loop (not main). stop joins us after
+// CFRunLoopStop, mirroring the arrival-thread semaphore handshake.
+- (void)paceThreadMain
+{
+    @autoreleasepool {
+        NSRunLoop *runLoop = [NSRunLoop currentRunLoop];
+        _paceRunLoop = [runLoop getCFRunLoop];
+        
+        _displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(displayLinkCallback:)];
+        _displayLink.preferredFrameRateRange = CAFrameRateRangeMake(self->frameRate, self->frameRate, self->frameRate);
+        [_displayLink addToRunLoop:runLoop forMode:NSDefaultRunLoopMode];
+        
+        while (!atomic_load(&_stopping)) {
+            // Timeout so a stop that races before CFRunLoopStop still exits promptly.
+            [runLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.25]];
+        }
+        
+        [_displayLink invalidate];
+        _displayLink = nil;
+        _paceRunLoop = NULL;
+    }
+    
+    dispatch_semaphore_signal(_renderThreadExited);
 }
 
 // TODO: Refactor this
@@ -297,6 +339,10 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
 
 - (void)displayLinkCallback:(CADisplayLink *)sender
 {
+    if (atomic_load(&_stopping)) {
+        return;
+    }
+    
     os_signpost_id_t signpostId = os_signpost_id_generate(VideoRendererSignpostLog());
     
     // Tick quantization: how far past its own tick this callback actually entered
@@ -306,21 +352,14 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     
     [self applyPendingHdrUpdate];
     
-    // Calculate the actual display refresh rate
-    double displayRefreshRate = 1 / (sender.targetTimestamp - sender.timestamp);
-    
-    // Only pace frames if the display refresh rate is >= 90% of our stream frame rate.
-    // Battery saver, accessibility settings, or device thermals can cause the actual
-    // refresh rate of the display to drop below the physical maximum.
-    BOOL pace = displayRefreshRate >= frameRate * 0.9f;
-    
+    // Drain soft-dropped P-frames toward the newest (or an under-age) frame, then enqueue at
+    // most one sample per tick. Refresh dips must not flood ASBDL with the whole FIFO.
     VIDEO_FRAME_HANDLE handle;
     PDECODE_UNIT du;
     while (LiPollNextVideoFrame(&handle, &du)) {
         MLEnqueueResult result = [self submitFrame:handle decodeUnit:du];
         
-        // Presenting one frame per refresh is the whole point of frame pacing
-        if (pace && result == MLEnqueueResultEnqueued) {
+        if (result == MLEnqueueResultEnqueued) {
             break;
         }
     }
@@ -341,26 +380,30 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     // without a real decode and leave later P-frames without a keyframe.
     BOOL isIdr = (du->frameType == FRAME_TYPE_IDR);
     
-    // Prefer the newest frame only on the arrival-driven path when the depacketizer is
-    // actually backed up. A single pending frame is normal at 120 Hz; treating that as
-    // overflow caused soft-drop → IDR → recover → soft-drop loops on lossy Wi-Fi.
-    // Soft-completing a skipped P-frame never feeds it to the decoder, so reference chains
-    // break until an IDR. After the first skip we request one IDR for the streak and refuse
-    // later P-frames until that keyframe is enqueued. A cooldown then blocks starting a new
-    // bout so recovery does not immediately thrash again. Frame pacing drains in order and
-    // never soft-drops.
-    static const int kSoftDropPendingThreshold = 2;
+    // Soft-drop older P-frames only on the arrival-driven path when the depacketizer is
+    // backed up or the frame is past the age gate. Frame pacing drains in decode order.
+    // After soft-drop, refuse later P-frames until IDR enqueue or RFI recovery of a later
+    // frame. Cooldown blocks starting a new IDR/RFI streak after recovery (no silent
+    // DR_OK age drops that would corrupt the reference chain).
     static const uint64_t kSoftDropIdrCooldownoldownMs = 1500;
+    
+    BOOL pressure = self.networkPressureMode;
+    uint64_t maxAgeMs = MLSoftDropMaxAgeMs(frameRate, pressure);
     
     int pendingFrames = LiGetPendingVideoFrames();
     NotePendingPeak(&_maxPendingFrames, pendingFrames);
     BOOL cooldownActive = nowMs < _softDropIdrCooldownoldownUntilMs;
-    // Keep threshold at 2 even under networkPressureMode. Pending==1 is normal at
-    // 120 Hz; dropping to threshold 1 reintroduces soft-drop/IDR thrash on Wi-Fi.
-    BOOL dropForNewest = !framePacing && !isIdr && !cooldownActive &&
-                         pendingFrames >= kSoftDropPendingThreshold;
-    BOOL dropBrokenChain = !framePacing && !isIdr && _arrivalDecodeChainBroken;
-    BOOL drop = dropForNewest || dropBrokenChain;
+    MLSoftDropDecision decision = MLSoftDropEvaluate(isIdr,
+                                                     framePacing,
+                                                     cooldownActive,
+                                                     _arrivalDecodeChainBroken,
+                                                     _rfiSoftDropRecoveryPending,
+                                                     du->frameNumber,
+                                                     _rfiSoftDroppedFrameNumber,
+                                                     pendingFrames,
+                                                     frameAgeMs,
+                                                     maxAgeMs);
+    BOOL drop = decision.drop;
     
     DrNoteClientQueueAgeMs(frameAgeMs);
     
@@ -373,16 +416,43 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     if (drop) {
         result = MLEnqueueResultDropped;
         atomic_fetch_add_explicit(&_softDroppedFrames, 1, memory_order_relaxed);
+        
         if (!_arrivalIdrRequestedForSoftDrop) {
             _arrivalDecodeChainBroken = YES;
             _arrivalIdrRequestedForSoftDrop = YES;
-            drStatus = DR_NEED_IDR;
-            atomic_fetch_add_explicit(&_softDropIdrRequests, 1, memory_order_relaxed);
-            os_log(VideoRendererPerfLog(),
-                        "event=softdrop_idr pending=%{public}d ageMs=%{public}llu cooldownMs=%{public}llu",
-                        pendingFrames,
-                        (unsigned long long)frameAgeMs,
-                        (unsigned long long)kSoftDropIdrCooldownoldownMs);
+            
+            // Prefer RFI when negotiated: notify the dropped frame and complete DR_OK.
+            // Keep the chain marked broken until an IDR enqueues or a later frame after the
+            // latest notified drop enqueues successfully. If RFI is off, request one IDR.
+            BOOL rfiEnabled = LiIsReferenceFrameInvalidationEnabled();
+            if (rfiEnabled) {
+                LiNotifyClientDroppedFrames((uint32_t)du->frameNumber, (uint32_t)du->frameNumber);
+                _rfiSoftDropRecoveryPending = YES;
+                _rfiSoftDroppedFrameNumber = du->frameNumber;
+                drStatus = DR_OK;
+                atomic_fetch_add_explicit(&_softDropIdrRequests, 1, memory_order_relaxed);
+                os_log(VideoRendererPerfLog(),
+                       "event=softdrop_rfi pending=%{public}d ageMs=%{public}llu frame=%{public}d",
+                       pendingFrames,
+                       (unsigned long long)frameAgeMs,
+                       du->frameNumber);
+            }
+            else {
+                drStatus = DR_NEED_IDR;
+                atomic_fetch_add_explicit(&_softDropIdrRequests, 1, memory_order_relaxed);
+                os_log(VideoRendererPerfLog(),
+                       "event=softdrop_idr pending=%{public}d ageMs=%{public}llu cooldownMs=%{public}llu",
+                       pendingFrames,
+                       (unsigned long long)frameAgeMs,
+                       (unsigned long long)kSoftDropIdrCooldownoldownMs);
+            }
+        }
+        else if (_rfiSoftDropRecoveryPending) {
+            // Extend the invalidated range for every additional soft-drop in the streak so
+            // the host knows about each missing ref, not only the first.
+            LiNotifyClientDroppedFrames((uint32_t)du->frameNumber, (uint32_t)du->frameNumber);
+            _rfiSoftDroppedFrameNumber = du->frameNumber;
+            drStatus = DR_OK;
         }
         else {
             drStatus = DR_OK;
@@ -394,16 +464,30 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
             atomic_fetch_add_explicit(&_needsIdrResults, 1, memory_order_relaxed);
         }
         drStatus = (result == MLEnqueueResultNeedsIdr) ? DR_NEED_IDR : DR_OK;
-        if (isIdr && result == MLEnqueueResultEnqueued) {
+        if (result == MLEnqueueResultEnqueued) {
             BOOL wasBroken = _arrivalDecodeChainBroken;
-            _arrivalDecodeChainBroken = NO;
-            _arrivalIdrRequestedForSoftDrop = NO;
-            atomic_fetch_add_explicit(&_idrEnqueued, 1, memory_order_relaxed);
-            if (wasBroken) {
-                _softDropIdrCooldownoldownUntilMs = nowMs + kSoftDropIdrCooldownoldownMs;
+            BOOL recoveredByIdr = isIdr;
+            BOOL recoveredByRfi = decision.rfiRecoveryCandidate;
+            if (recoveredByIdr || recoveredByRfi) {
+                _arrivalDecodeChainBroken = NO;
+                _arrivalIdrRequestedForSoftDrop = NO;
+                _rfiSoftDropRecoveryPending = NO;
+                _rfiSoftDroppedFrameNumber = 0;
+            }
+            if (isIdr) {
+                atomic_fetch_add_explicit(&_idrEnqueued, 1, memory_order_relaxed);
+                if (wasBroken) {
+                    _softDropIdrCooldownoldownUntilMs = nowMs + kSoftDropIdrCooldownoldownMs;
+                    os_log(VideoRendererPerfLog(),
+                           "event=softdrop_recovered cooldownMs=%{public}llu pending=%{public}d",
+                           (unsigned long long)kSoftDropIdrCooldownoldownMs,
+                           pendingFrames);
+                }
+            }
+            else if (recoveredByRfi) {
                 os_log(VideoRendererPerfLog(),
-                       "event=softdrop_recovered cooldownMs=%{public}llu pending=%{public}d",
-                       (unsigned long long)kSoftDropIdrCooldownoldownMs,
+                       "event=softdrop_rfi_recovered frame=%{public}d pending=%{public}d",
+                       du->frameNumber,
                        pendingFrames);
             }
         }
@@ -431,26 +515,27 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     // Latch before waking so any frame still in flight completes as DR_OK
     atomic_store(&_stopping, true);
     
-    if (_displayLink != nil) {
-        CADisplayLink* displayLink = _displayLink;
-        _displayLink = nil;
-        if ([NSThread isMainThread]) {
-            [displayLink invalidate];
-        }
-        else {
-            dispatch_sync(dispatch_get_main_queue(), ^{
-                [displayLink invalidate];
-            });
-        }
-    }
-    
     if (_renderThread != nil) {
         // The streaming core destroys the depacketizer queue and its mutex shortly after stop
-        // returns, so the render thread has to be gone before we hand control back.
-        LiWakeWaitForVideoFrame();
+        // returns, so the render/pace thread has to be gone before we hand control back.
+        if (framePacing) {
+            CFRunLoopRef paceLoop = _paceRunLoop;
+            if (paceLoop != NULL) {
+                CFRunLoopStop(paceLoop);
+            }
+        }
+        else {
+            LiWakeWaitForVideoFrame();
+        }
         dispatch_semaphore_wait(_renderThreadExited, DISPATCH_TIME_FOREVER);
         _renderThread = nil;
+        // DisplayLink is invalidated on the pace thread before it signals exit.
+        _displayLink = nil;
+        _paceRunLoop = NULL;
     }
+    
+    // Invalidate only after the pace/render thread has joined so it cannot race CFRelease.
+    [_av1FormatDescCache invalidate];
 }
 
 #define NAL_LENGTH_PREFIX_SIZE 4
@@ -493,6 +578,12 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
 
 // Much of this logic comes from Chrome
 - (CMVideoFormatDescriptionRef)createAV1FormatDescriptionForIDRFrame:(NSData*)frameData {
+    NSData *av1c = [self getAv1CodecConfigurationBox:frameData];
+    CMVideoFormatDescriptionRef cached = [_av1FormatDescCache copyFormatDescriptionForAv1C:av1c];
+    if (cached != NULL) {
+        return cached;
+    }
+
     NSMutableDictionary* extensions = [[NSMutableDictionary alloc] init];
 
     CodedBitstreamContext* cbsCtx = NULL;
@@ -651,7 +742,7 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     // https://source.chromium.org/chromium/chromium/src/+/main:media/gpu/mac/vt_config_util.mm;drc=977dc02c431b4979e34c7792bc3d646f649dacb4;l=155
     extensions[(__bridge NSString*)kCMFormatDescriptionExtension_SampleDescriptionExtensionAtoms] =
     @{
-        @"av1C" : [self getAv1CodecConfigurationBox:frameData],
+        @"av1C" : av1c ?: [NSData data],
     };
     extensions[@"BitsPerComponent"] = @(bitstreamCtx->bit_depth);
     
@@ -671,6 +762,10 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     
     ff_cbs_fragment_free(&cbsFrag);
     ff_cbs_close(&cbsCtx);
+
+    if (formatDesc != NULL && av1c != nil) {
+        [_av1FormatDescCache storeFormatDescription:formatDesc forAv1C:av1c];
+    }
     return formatDesc;
 }
 
@@ -1066,6 +1161,7 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     // If the metadata changed, request an IDR frame to re-create the CMVideoFormatDescription.
     // Re-check stop so a snapshot that landed during teardown cannot still request an IDR.
     if (metadataChanged && !atomic_load(&_stopping)) {
+        [_av1FormatDescCache invalidate];
         os_log(VideoRendererPerfLog(),
                     "event=hdr_idr enabled=%{public}d",
                     enabled ? 1 : 0);

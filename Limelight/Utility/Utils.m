@@ -117,6 +117,22 @@ static const CFTimeInterval kWiFiCacheTTLSeconds = 5.0;
             isPrivateLAN:(BOOL)isPrivateLAN
                   isWiFi:(BOOL)isWiFi
    aggressiveWifiPackets:(BOOL)aggressiveWifiPackets {
+    [self streamRemoteMode:streamingRemotely
+                packetSize:packetSize
+                     isVPN:isVPN
+              isPrivateLAN:isPrivateLAN
+                    isWiFi:isWiFi
+     aggressiveWifiPackets:aggressiveWifiPackets
+           pathConstrained:NO];
+}
+
++ (void)streamRemoteMode:(int*)streamingRemotely
+              packetSize:(int*)packetSize
+                   isVPN:(BOOL)isVPN
+            isPrivateLAN:(BOOL)isPrivateLAN
+                  isWiFi:(BOOL)isWiFi
+   aggressiveWifiPackets:(BOOL)aggressiveWifiPackets
+         pathConstrained:(BOOL)pathConstrained {
     if (streamingRemotely == NULL || packetSize == NULL) {
         return;
     }
@@ -126,8 +142,14 @@ static const CFTimeInterval kWiFiCacheTTLSeconds = 5.0;
     }
     else if (isPrivateLAN) {
         *streamingRemotely = STREAM_CFG_LOCAL;
-        if (isWiFi) {
-            *packetSize = aggressiveWifiPackets ? 1392 : 1024;
+        if (pathConstrained) {
+            // Constrained/expensive path: keep conservative MTU even on LAN Wi-Fi.
+            *packetSize = 1024;
+        }
+        else if (isWiFi) {
+            // Clean private LAN Wi-Fi defaults to 1392; aggressiveWifiPackets=YES is still 1392.
+            (void)aggressiveWifiPackets;
+            *packetSize = 1392;
         }
         else {
             *packetSize = 1392;
@@ -137,6 +159,13 @@ static const CFTimeInterval kWiFiCacheTTLSeconds = 5.0;
         *streamingRemotely = STREAM_CFG_AUTO;
         *packetSize = 1024;
     }
+}
+
+int MLStreamEncryptionFlags(BOOL disableOnLan, BOOL isPrivateLAN, BOOL isVPN) {
+    if (disableOnLan && isPrivateLAN && !isVPN) {
+        return ENCFLG_NONE;
+    }
+    return ENCFLG_ALL;
 }
 
 + (BOOL)isPrivateAddress:(NSString*)address {

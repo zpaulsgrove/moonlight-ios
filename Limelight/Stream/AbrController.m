@@ -40,6 +40,8 @@ static os_log_t AbrPerfLog(void)
     BOOL _localAdaptationActive;
     BOOL _connectionPoor;
     BOOL _pathConstrained;
+    BOOL _pathHoldActive;
+    CFTimeInterval _pathHoldUntil;
     NSInteger _generation;
     BOOL _applyInFlight;
     uint32_t _lastFecRecoveredFrames;
@@ -101,6 +103,8 @@ static os_log_t AbrPerfLog(void)
     NSInteger gen = _generation;
     NetworkPathMonitor *pathMonitor = [NetworkPathMonitor sharedMonitor];
     _pathConstrained = pathMonitor.hasPath && (pathMonitor.isConstrained || pathMonitor.isExpensive);
+    _pathHoldActive = _pathConstrained;
+    _pathHoldUntil = _pathConstrained ? CACurrentMediaTime() + MLAbrPathHintHoldDuration : 0;
     __weak AbrController *weakSelf = self;
     [pathMonitor addObserver:self handler:^(NetworkPathMonitor *monitor) {
         BOOL constrained = monitor.isConstrained || monitor.isExpensive;
@@ -162,6 +166,8 @@ static os_log_t AbrPerfLog(void)
     _applyInFlight = NO;
     _connectionPoor = NO;
     _pathConstrained = NO;
+    _pathHoldActive = NO;
+    _pathHoldUntil = 0;
     _hasFecBaseline = NO;
     _hasBytesBaseline = NO;
     [[NetworkPathMonitor sharedMonitor] removeObserver:self];
@@ -264,7 +270,10 @@ static os_log_t AbrPerfLog(void)
     NSInteger next = MLNextAbrBitrate(_currentKbps, _ceilingKbps, _floorKbps,
                                       dropRatePercent, variance,
                                       fecRepairRatePercent, queueLatencyMs, hardPoor);
-    next = MLAbrApplyPathHint(next, _currentKbps, _pathConstrained);
+    // Soft path hint expires after MLAbrPathHintHoldDuration once constrained clears.
+    next = MLAbrApplyPathHintEx(next, _currentKbps, _pathConstrained,
+                                &_pathHoldActive, &_pathHoldUntil, now,
+                                MLAbrPathHintHoldDuration);
     
     BOOL wantsCut = next < _currentKbps;
     // Always refresh pressure, including while a host apply is in flight.

@@ -10,8 +10,11 @@
 #import "AbrBitrateHelpers.h"
 #import "Utils.h"
 #import "AnnexBHelpers.h"
+#import "SoftDropHelpers.h"
+#import "Av1FormatDescCache.h"
 
 #include <Limelight.h>
+#import <CoreMedia/CoreMedia.h>
 
 @interface MoonlightPerfHelpersTests : XCTestCase
 @end
@@ -80,6 +83,43 @@
     XCTAssertFalse(MLAbrWantsNetworkPressure(NO, NO));
     XCTAssertTrue(MLAbrWantsNetworkPressure(YES, NO));
     XCTAssertTrue(MLAbrWantsNetworkPressure(NO, YES));
+}
+
+- (void)testAbrPathHintExpiryHold {
+    CFTimeInterval holdUntil = 0;
+    BOOL holdActive = NO;
+    CFTimeInterval now = 100.0;
+    CFTimeInterval hold = MLAbrPathHintHoldDuration;
+
+    // Constrained: suppress up-ramp and arm hold window.
+    NSInteger next = MLAbrApplyPathHintEx(55000, 50000, YES, &holdActive, &holdUntil, now, hold);
+    XCTAssertEqual(next, 50000);
+    XCTAssertTrue(holdActive);
+    XCTAssertEqualWithAccuracy(holdUntil, now + hold, 0.001);
+
+    // Cuts still apply while held.
+    next = MLAbrApplyPathHintEx(40000, 50000, YES, &holdActive, &holdUntil, now + 1.0, hold);
+    XCTAssertEqual(next, 40000);
+    XCTAssertTrue(holdActive);
+
+    // Path cleared but still inside hold: suppress up-ramps.
+    now = holdUntil - 0.5;
+    next = MLAbrApplyPathHintEx(55000, 50000, NO, &holdActive, &holdUntil, now, hold);
+    XCTAssertEqual(next, 50000);
+    XCTAssertTrue(holdActive);
+
+    // After hold expires: up-ramps allowed again.
+    now = holdUntil + 0.01;
+    next = MLAbrApplyPathHintEx(55000, 50000, NO, &holdActive, &holdUntil, now, hold);
+    XCTAssertEqual(next, 55000);
+    XCTAssertFalse(holdActive);
+    XCTAssertEqualWithAccuracy(holdUntil, 0.0, 0.001);
+
+    // Nil holdUntil falls back to forever-while-constrained behavior.
+    next = MLAbrApplyPathHintEx(55000, 50000, YES, NULL, NULL, 0, hold);
+    XCTAssertEqual(next, 50000);
+    next = MLAbrApplyPathHintEx(55000, 50000, NO, NULL, NULL, 0, hold);
+    XCTAssertEqual(next, 55000);
 }
 
 - (void)testAbrFecRepairAndQueueLatencyHelpers {
@@ -216,31 +256,157 @@
     int remote = 0;
     int packet = 0;
     
-    [Utils streamRemoteMode:&remote packetSize:&packet isVPN:YES isPrivateLAN:YES isWiFi:YES aggressiveWifiPackets:NO];
+    [Utils streamRemoteMode:&remote packetSize:&packet isVPN:YES isPrivateLAN:YES isWiFi:YES aggressiveWifiPackets:NO pathConstrained:NO];
     XCTAssertEqual(remote, STREAM_CFG_REMOTE);
     XCTAssertEqual(packet, 1024);
     
-    [Utils streamRemoteMode:&remote packetSize:&packet isVPN:NO isPrivateLAN:YES isWiFi:YES aggressiveWifiPackets:NO];
-    XCTAssertEqual(remote, STREAM_CFG_LOCAL);
-    XCTAssertEqual(packet, 1024);
-    
-    [Utils streamRemoteMode:&remote packetSize:&packet isVPN:NO isPrivateLAN:YES isWiFi:NO aggressiveWifiPackets:NO];
+    // Clean private LAN Wi-Fi: 1392 without aggressive setting.
+    [Utils streamRemoteMode:&remote packetSize:&packet isVPN:NO isPrivateLAN:YES isWiFi:YES aggressiveWifiPackets:NO pathConstrained:NO];
     XCTAssertEqual(remote, STREAM_CFG_LOCAL);
     XCTAssertEqual(packet, 1392);
     
-    [Utils streamRemoteMode:&remote packetSize:&packet isVPN:NO isPrivateLAN:NO isWiFi:YES aggressiveWifiPackets:NO];
+    // Constrained/expensive path forces 1024 even on LAN Wi-Fi with aggressive=YES.
+    [Utils streamRemoteMode:&remote packetSize:&packet isVPN:NO isPrivateLAN:YES isWiFi:YES aggressiveWifiPackets:YES pathConstrained:YES];
+    XCTAssertEqual(remote, STREAM_CFG_LOCAL);
+    XCTAssertEqual(packet, 1024);
+    
+    [Utils streamRemoteMode:&remote packetSize:&packet isVPN:NO isPrivateLAN:YES isWiFi:NO aggressiveWifiPackets:NO pathConstrained:NO];
+    XCTAssertEqual(remote, STREAM_CFG_LOCAL);
+    XCTAssertEqual(packet, 1392);
+    
+    [Utils streamRemoteMode:&remote packetSize:&packet isVPN:NO isPrivateLAN:NO isWiFi:YES aggressiveWifiPackets:NO pathConstrained:NO];
     XCTAssertEqual(remote, STREAM_CFG_AUTO);
     XCTAssertEqual(packet, 1024);
     
-    [Utils streamRemoteMode:&remote packetSize:&packet isVPN:NO isPrivateLAN:YES isWiFi:YES aggressiveWifiPackets:YES];
+    [Utils streamRemoteMode:&remote packetSize:&packet isVPN:NO isPrivateLAN:YES isWiFi:YES aggressiveWifiPackets:YES pathConstrained:NO];
     XCTAssertEqual(remote, STREAM_CFG_LOCAL);
     XCTAssertEqual(packet, 1392);
+
+    // Legacy wrapper (no pathConstrained) still returns clean-LAN 1392.
+    [Utils streamRemoteMode:&remote packetSize:&packet isVPN:NO isPrivateLAN:YES isWiFi:YES aggressiveWifiPackets:NO];
+    XCTAssertEqual(packet, 1392);
+}
+
+- (void)testStreamEncryptionFlagsHelper {
+    XCTAssertEqual(MLStreamEncryptionFlags(NO, YES, NO), ENCFLG_ALL);
+    XCTAssertEqual(MLStreamEncryptionFlags(YES, YES, NO), ENCFLG_NONE);
+    XCTAssertEqual(MLStreamEncryptionFlags(YES, YES, YES), ENCFLG_ALL); // VPN blocks cleartext
+    XCTAssertEqual(MLStreamEncryptionFlags(YES, NO, NO), ENCFLG_ALL); // not private LAN
+    XCTAssertEqual(MLStreamEncryptionFlags(NO, NO, NO), ENCFLG_ALL);
 }
 
 - (void)testAbrInitialKbpsWiFiRamp {
     XCTAssertEqual(MLAbrInitialKbps(50000, 20000, YES), 40000);
     XCTAssertEqual(MLAbrInitialKbps(50000, 20000, NO), 50000);
     XCTAssertEqual(MLAbrInitialKbps(20000, 18000, YES), 18000); // 80% below floor clamps up
+}
+
+- (void)testSoftDropMaxAgeMs {
+    // 120 Hz: 1500/120 = 12.5 -> 12 floor does not bind; integer division yields 12.
+    XCTAssertEqual(MLSoftDropMaxAgeMs(120, NO), 12ull);
+    // Pressure uses ~1.2 periods with a 12 ms floor (not one period / 8 ms).
+    XCTAssertEqual(MLSoftDropMaxAgeMs(120, YES), 12ull); // MAX(12, 1200/120=10)
+    XCTAssertEqual(MLSoftDropMaxAgeMs(60, NO), 25ull);  // 1500/60
+    XCTAssertEqual(MLSoftDropMaxAgeMs(60, YES), 20ull); // 1200/60
+    XCTAssertEqual(MLSoftDropMaxAgeMs(240, NO), 12ull); // MAX(12, 1500/240=6)
+    XCTAssertEqual(MLSoftDropMaxAgeMs(240, YES), 12ull); // MAX(12, 1200/240=5)
+    XCTAssertEqual(MLSoftDropMaxAgeMs(0, NO), 1500ull); // fps clamped to 1
+    XCTAssertEqual(MLSoftDropMaxAgeMs(0, YES), 1200ull);
+}
+
+- (void)testSoftDropEvaluatePacingAndAgeGuards {
+    // Frame pacing never soft-drops for backlog/age.
+    MLSoftDropDecision paced = MLSoftDropEvaluate(/*isIdr*/NO,
+                                                  /*framePacing*/YES,
+                                                  /*cooldown*/NO,
+                                                  /*broken*/NO,
+                                                  /*rfiPending*/NO,
+                                                  /*frame*/10,
+                                                  /*rfiDropped*/0,
+                                                  /*pending*/5,
+                                                  /*age*/100,
+                                                  /*maxAge*/12);
+    XCTAssertFalse(paced.drop);
+    XCTAssertFalse(paced.dropForBacklog);
+    XCTAssertFalse(paced.dropForAge);
+    
+    // Age drop requires pending >= 1 (sole waited frame must not be discarded).
+    MLSoftDropDecision sole = MLSoftDropEvaluate(NO, NO, NO, NO, NO, 10, 0, 0, 100, 12);
+    XCTAssertFalse(sole.dropForAge);
+    XCTAssertFalse(sole.drop);
+    
+    MLSoftDropDecision aged = MLSoftDropEvaluate(NO, NO, NO, NO, NO, 10, 0, 1, 100, 12);
+    XCTAssertTrue(aged.dropForAge);
+    XCTAssertTrue(aged.drop);
+    
+    // Backlog needs pending >= threshold.
+    MLSoftDropDecision backlog = MLSoftDropEvaluate(NO, NO, NO, NO, NO, 10, 0, 2, 0, 12);
+    XCTAssertTrue(backlog.dropForBacklog);
+    XCTAssertTrue(backlog.drop);
+    
+    MLSoftDropDecision onePending = MLSoftDropEvaluate(NO, NO, NO, NO, NO, 10, 0, 1, 0, 12);
+    XCTAssertFalse(onePending.dropForBacklog);
+    XCTAssertFalse(onePending.drop);
+}
+
+- (void)testSoftDropEvaluateCooldownAndRfiRecovery {
+    // Cooldown blocks new backlog/age streaks (no silent DR_OK age-drop path).
+    MLSoftDropDecision coolAge = MLSoftDropEvaluate(NO, NO, /*cooldown*/YES, NO, NO, 10, 0, 3, 100, 12);
+    XCTAssertFalse(coolAge.dropForBacklog);
+    XCTAssertFalse(coolAge.dropForAge);
+    XCTAssertFalse(coolAge.drop);
+    
+    // Broken chain still drops during cooldown.
+    MLSoftDropDecision coolBroken = MLSoftDropEvaluate(NO, NO, YES, /*broken*/YES, NO, 10, 0, 0, 0, 12);
+    XCTAssertTrue(coolBroken.dropBrokenChain);
+    XCTAssertTrue(coolBroken.drop);
+    
+    // RFI recovery candidate clears backlog/age/broken so a later frame can enqueue.
+    MLSoftDropDecision rfi = MLSoftDropEvaluate(NO, NO, NO, /*broken*/YES, /*rfi*/YES,
+                                                /*frame*/20, /*dropped*/15,
+                                                /*pending*/4, /*age*/100, /*maxAge*/12);
+    XCTAssertTrue(rfi.rfiRecoveryCandidate);
+    XCTAssertFalse(rfi.dropForBacklog);
+    XCTAssertFalse(rfi.dropForAge);
+    XCTAssertFalse(rfi.dropBrokenChain);
+    XCTAssertFalse(rfi.drop);
+    
+    // Same-or-older frame than last RFI drop is not a recovery candidate.
+    MLSoftDropDecision notYet = MLSoftDropEvaluate(NO, NO, NO, YES, YES, 15, 15, 4, 100, 12);
+    XCTAssertFalse(notYet.rfiRecoveryCandidate);
+    XCTAssertTrue(notYet.dropBrokenChain);
+    XCTAssertTrue(notYet.drop);
+}
+
+- (void)testAv1FormatDescCacheHitMissAndInvalidate {
+    Av1FormatDescCache *cache = [[Av1FormatDescCache alloc] init];
+    CMVideoFormatDescriptionRef desc = NULL;
+    OSStatus status = CMVideoFormatDescriptionCreate(kCFAllocatorDefault,
+                                                     kCMVideoCodecType_H264,
+                                                     1920,
+                                                     1080,
+                                                     NULL,
+                                                     &desc);
+    XCTAssertEqual(status, noErr);
+    XCTAssertNotEqual(desc, NULL);
+    
+    NSData *keyA = [@"av1c-a" dataUsingEncoding:NSUTF8StringEncoding];
+    NSData *keyB = [@"av1c-b" dataUsingEncoding:NSUTF8StringEncoding];
+    
+    XCTAssertEqual([cache copyFormatDescriptionForAv1C:keyA], NULL);
+    
+    [cache storeFormatDescription:desc forAv1C:keyA];
+    CMVideoFormatDescriptionRef hit = [cache copyFormatDescriptionForAv1C:keyA];
+    XCTAssertEqual(hit, desc);
+    if (hit != NULL) {
+        CFRelease(hit);
+    }
+    XCTAssertEqual([cache copyFormatDescriptionForAv1C:keyB], NULL);
+    
+    [cache invalidate];
+    XCTAssertEqual([cache copyFormatDescriptionForAv1C:keyA], NULL);
+    
+    CFRelease(desc);
 }
 
 - (void)testPresetResolutionFactors {

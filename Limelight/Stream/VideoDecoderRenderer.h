@@ -39,7 +39,8 @@ typedef struct {
 - (void)start;
 - (void)stop;
 
-// When YES (non-Vibepollo local fallback / poor path), marks congestion for stats/logging.
+// When YES (local ABR pressure / poor path), use a tighter late-frame age gate
+// (about one frame period) and slightly more aggressive paced draining.
 // Soft-drop pending threshold stays at 2 either way to avoid 120 Hz IDR thrash.
 @property (atomic) BOOL networkPressureMode;
 

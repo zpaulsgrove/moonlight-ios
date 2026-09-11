@@ -6,6 +6,9 @@
 //  Copyright (c) 2014 Moonlight Stream. All rights reserved.
 //
 
+// Pure encryption flag helper. Opt-in cleartext only on private LAN outside VPN.
+FOUNDATION_EXPORT int MLStreamEncryptionFlags(BOOL disableOnLan, BOOL isPrivateLAN, BOOL isVPN);
+
 @interface Utils : NSObject
 
 typedef NS_ENUM(int, PairState) {
@@ -33,8 +36,18 @@ FOUNDATION_EXPORT NSString *const deviceName;
 + (BOOL)isPrivateAddress:(NSString*)address;
 
 // Pure path helper for stream packet sizing (testable without live Network probes).
-// VPN: REMOTE+1024; private LAN+Wi-Fi+aggressive: LOCAL+1392; private LAN+Wi-Fi: LOCAL+1024;
-// private LAN wired: LOCAL+1392; else AUTO+1024.
+// VPN or pathConstrained: force 1024. Private LAN+Wi-Fi on a clean path: LOCAL+1392
+// (aggressiveWifiPackets still honored as YES; clean LAN Wi-Fi no longer requires it).
+// Private LAN wired: LOCAL+1392. Else AUTO+1024.
++ (void)streamRemoteMode:(int*)streamingRemotely
+              packetSize:(int*)packetSize
+                   isVPN:(BOOL)isVPN
+            isPrivateLAN:(BOOL)isPrivateLAN
+                  isWiFi:(BOOL)isWiFi
+   aggressiveWifiPackets:(BOOL)aggressiveWifiPackets
+         pathConstrained:(BOOL)pathConstrained;
+
+// Backward-compatible wrapper: pathConstrained=NO.
 + (void)streamRemoteMode:(int*)streamingRemotely
               packetSize:(int*)packetSize
                    isVPN:(BOOL)isVPN

@@ -12,6 +12,7 @@
 
 static const int REFERENCE_WIDTH = 1280;
 static const int REFERENCE_HEIGHT = 720;
+static const int64_t kMouseClickHoldNs = 16 * NSEC_PER_MSEC;
 
 @implementation RelativeTouchHandler {
     CGPoint touchLocation, originalLocation;
@@ -19,6 +20,11 @@ static const int REFERENCE_HEIGHT = 720;
     BOOL isDragging;
     NSTimer* dragTimer;
     NSUInteger peakTouchCount;
+    NSUInteger clickReleaseGeneration;
+    // When a PRESS has a deferred RELEASE, cancel must release immediately or the
+    // button sticks after generation invalidation.
+    BOOL hasPendingClickRelease;
+    int pendingClickReleaseButton;
     
 #if TARGET_OS_TV
     UIGestureRecognizer* remotePressRecognizer;
@@ -51,8 +57,31 @@ static const int REFERENCE_HEIGHT = 720;
     return hypotf(originalPoint.x - currentPoint.x, originalPoint.y - currentPoint.y) >= 5;
 }
 
+- (void)cancelPendingClickRelease {
+    clickReleaseGeneration++;
+    if (hasPendingClickRelease) {
+        int button = pendingClickReleaseButton;
+        hasPendingClickRelease = NO;
+        LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, button);
+    }
+}
+
+- (void)scheduleMouseRelease:(int)button generation:(NSUInteger)generation {
+    hasPendingClickRelease = YES;
+    pendingClickReleaseButton = button;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, kMouseClickHoldNs),
+                   dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
+        if (generation != self->clickReleaseGeneration) {
+            return;
+        }
+        self->hasPendingClickRelease = NO;
+        LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, button);
+    });
+}
+
 - (void)onDragStart:(NSTimer*)timer {
     if (!touchMoved && !isDragging){
+        [self cancelPendingClickRelease];
         isDragging = true;
         LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_LEFT);
     }
@@ -125,33 +154,26 @@ static const int REFERENCE_HEIGHT = 720;
     [dragTimer invalidate];
     dragTimer = nil;
     if (isDragging) {
+        [self cancelPendingClickRelease];
         isDragging = false;
         LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_LEFT);
     } else if (!touchMoved) {
         if (peakTouchCount == 2) {
-            dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
-                Log(LOG_D, @"Sending right mouse button press");
-                
-                LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_RIGHT);
-                
-                // Wait 30 ms to simulate a real button press
-                usleep(30 * 1000);
-                
-                LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_RIGHT);
-            });
+            [self cancelPendingClickRelease];
+            NSUInteger generation = ++clickReleaseGeneration;
+            Log(LOG_D, @"Sending right mouse button press");
+            LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_RIGHT);
+            [self scheduleMouseRelease:BUTTON_RIGHT generation:generation];
         } else if (peakTouchCount == 1) {
-            dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
-                if (!self->isDragging){
-                    Log(LOG_D, @"Sending left mouse button press");
-                    
-                    LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_LEFT);
-                    
-                    // Wait 30 ms to simulate a real button press
-                    usleep(30 * 1000);
-                }
-                self->isDragging = false;
-                LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_LEFT);
-            });
+            if (!isDragging) {
+                [self cancelPendingClickRelease];
+                NSUInteger generation = ++clickReleaseGeneration;
+                Log(LOG_D, @"Sending left mouse button press");
+                LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_LEFT);
+                [self scheduleMouseRelease:BUTTON_LEFT generation:generation];
+            } else {
+                isDragging = false;
+            }
         }
     }
     
@@ -173,6 +195,8 @@ static const int REFERENCE_HEIGHT = 720;
 - (void)touchesCancelled:(NSSet *)touches withEvent:(UIEvent *)event {
     [dragTimer invalidate];
     dragTimer = nil;
+    // Releases any deferred click before invalidating its generation.
+    [self cancelPendingClickRelease];
     if (isDragging) {
         isDragging = false;
         LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_LEFT);
@@ -182,23 +206,20 @@ static const int REFERENCE_HEIGHT = 720;
 
 #if TARGET_OS_TV
 - (void)remoteButtonPressed:(id)sender {
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
-        Log(LOG_D, @"Sending left mouse button press");
-        
-        // Mark this as touchMoved to avoid a duplicate press on touch up
-        self->touchMoved = true;
-        
-        LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_LEFT);
-        
-        // Wait 30 ms to simulate a real button press
-        usleep(30 * 1000);
-            
-        LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, BUTTON_LEFT);
-    });
+    [self cancelPendingClickRelease];
+    NSUInteger generation = ++clickReleaseGeneration;
+    Log(LOG_D, @"Sending left mouse button press");
+    
+    // Mark this as touchMoved to avoid a duplicate press on touch up
+    self->touchMoved = true;
+    
+    LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_LEFT);
+    [self scheduleMouseRelease:BUTTON_LEFT generation:generation];
 }
 - (void)remoteButtonLongPressed:(id)sender {
     Log(LOG_D, @"Holding left mouse button");
     
+    [self cancelPendingClickRelease];
     isDragging = true;
     LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, BUTTON_LEFT);
 }

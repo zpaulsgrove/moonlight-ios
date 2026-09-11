@@ -77,11 +77,53 @@ NSInteger MLNextAbrBitrate(NSInteger current,
     return MLClampBitrate(next, ceiling, floor);
 }
 
+const CFTimeInterval MLAbrPathHintHoldDuration = 5.0;
+
 NSInteger MLAbrApplyPathHint(NSInteger nextKbps, NSInteger currentKbps, BOOL pathConstrained) {
     if (!pathConstrained) {
         return nextKbps;
     }
     // Soft hint only: hold bitrate rather than ramping up on a constrained path.
+    if (nextKbps > currentKbps) {
+        return currentKbps;
+    }
+    return nextKbps;
+}
+
+NSInteger MLAbrApplyPathHintEx(NSInteger nextKbps,
+                               NSInteger currentKbps,
+                               BOOL pathConstrained,
+                               BOOL *holdActive,
+                               CFTimeInterval *holdUntil,
+                               CFTimeInterval now,
+                               CFTimeInterval holdDuration) {
+    if (holdUntil == NULL) {
+        NSInteger result = MLAbrApplyPathHint(nextKbps, currentKbps, pathConstrained);
+        if (holdActive != NULL) {
+            *holdActive = pathConstrained;
+        }
+        return result;
+    }
+
+    if (holdDuration < 0.0) {
+        holdDuration = 0.0;
+    }
+
+    if (pathConstrained) {
+        *holdUntil = now + holdDuration;
+    }
+    else if (*holdUntil > 0.0 && now >= *holdUntil) {
+        *holdUntil = 0.0;
+    }
+
+    BOOL holding = pathConstrained || (*holdUntil > 0.0 && now < *holdUntil);
+    if (holdActive != NULL) {
+        *holdActive = holding;
+    }
+
+    if (!holding) {
+        return nextKbps;
+    }
     if (nextKbps > currentKbps) {
         return currentKbps;
     }

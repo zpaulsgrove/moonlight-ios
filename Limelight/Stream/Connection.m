@@ -8,6 +8,7 @@
 
 #import "Connection.h"
 #import "Utils.h"
+#import "NetworkPathMonitor.h"
 
 #import <VideoToolbox/VideoToolbox.h>
 
@@ -470,13 +471,20 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
     // need to check for that here.
     BOOL isVPN = [Utils isActiveNetworkVPN];
     BOOL isPrivateLAN = [Utils isPrivateAddress:rawAddress];
-    // Optional LAN cleartext: only on private LAN and never over VPN.
-    if (config.disableEncryptionOnLan && isPrivateLAN && !isVPN) {
-        _streamConfig.encryptionFlags = ENCFLG_NONE;
+    BOOL isWiFi = [Utils isActiveNetworkWiFi];
+    NetworkPathMonitor *pathMonitor = [NetworkPathMonitor sharedMonitor];
+    BOOL pathConstrained = pathMonitor.hasPath && (pathMonitor.isConstrained || pathMonitor.isExpensive);
+
+    // Opt-in LAN cleartext only: private LAN and never over VPN. Not automatic.
+    int encryptionFlags = MLStreamEncryptionFlags(config.disableEncryptionOnLan, isPrivateLAN, isVPN);
+    _streamConfig.encryptionFlags = encryptionFlags;
+    Log(LOG_I, @"Stream encryption flags=0x%x (disableOnLan=%d privateLAN=%d vpn=%d)",
+        encryptionFlags,
+        config.disableEncryptionOnLan ? 1 : 0,
+        isPrivateLAN ? 1 : 0,
+        isVPN ? 1 : 0);
+    if (encryptionFlags == ENCFLG_NONE) {
         Log(LOG_W, @"Stream encryption disabled on private LAN (user setting)");
-    }
-    else {
-        _streamConfig.encryptionFlags = ENCFLG_ALL;
     }
     
     int streamingRemotely = STREAM_CFG_AUTO;
@@ -485,8 +493,12 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
                  packetSize:&packetSize
                       isVPN:isVPN
                isPrivateLAN:isPrivateLAN
-                     isWiFi:[Utils isActiveNetworkWiFi]
-      aggressiveWifiPackets:config.aggressiveWifiPackets];
+                     isWiFi:isWiFi
+      aggressiveWifiPackets:config.aggressiveWifiPackets
+            pathConstrained:pathConstrained];
+    Log(LOG_I, @"Stream packetSize=%d remoteMode=%d (wifi=%d pathConstrained=%d aggressive=%d)",
+        packetSize, streamingRemotely, isWiFi ? 1 : 0, pathConstrained ? 1 : 0,
+        config.aggressiveWifiPackets ? 1 : 0);
     _streamConfig.streamingRemotely = streamingRemotely;
     _streamConfig.packetSize = packetSize;
 
