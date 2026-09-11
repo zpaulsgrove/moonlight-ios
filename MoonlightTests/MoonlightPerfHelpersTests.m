@@ -70,6 +70,18 @@
     XCTAssertEqual(nearCeiling, ceiling);
 }
 
+- (void)testAbrPathHintDoesNotForceCuts {
+    // Constrained path alone must not slash bitrate every tick.
+    XCTAssertEqual(MLAbrApplyPathHint(50000, 50000, YES), 50000);
+    XCTAssertEqual(MLAbrApplyPathHint(40000, 50000, YES), 40000); // cuts from real signals still apply
+    XCTAssertEqual(MLAbrApplyPathHint(55000, 50000, YES), 50000); // suppress up-ramp only
+    XCTAssertEqual(MLAbrApplyPathHint(55000, 50000, NO), 55000);
+    
+    XCTAssertFalse(MLAbrWantsNetworkPressure(NO, NO));
+    XCTAssertTrue(MLAbrWantsNetworkPressure(YES, NO));
+    XCTAssertTrue(MLAbrWantsNetworkPressure(NO, YES));
+}
+
 - (void)testAbrFecRepairAndQueueLatencyHelpers {
     XCTAssertEqualWithAccuracy(MLFecRepairRatePercent(0, 120), 0.0f, 0.001f);
     XCTAssertEqualWithAccuracy(MLFecRepairRatePercent(3, 100), 3.0f, 0.001f);

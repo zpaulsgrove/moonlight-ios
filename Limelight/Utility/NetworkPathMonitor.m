@@ -52,6 +52,11 @@
         if (_running) {
             return;
         }
+        // Unknown until the first callback for this session.
+        self.hasPath = NO;
+        self.isConstrained = NO;
+        self.isExpensive = NO;
+        self.isWiFi = YES;
         _running = YES;
         
         nw_path_monitor_t monitor = nw_path_monitor_create();
@@ -81,10 +86,21 @@
             nw_path_monitor_cancel(_monitor);
             _monitor = nil;
         }
+        // Force the next consumer to re-probe / wait for a fresh update.
+        self.hasPath = NO;
+        self.isConstrained = NO;
+        self.isExpensive = NO;
+        self.isWiFi = YES;
     }
 }
 
 - (void)applyPath:(nw_path_t)path {
+    @synchronized (self) {
+        if (!_running) {
+            return;
+        }
+    }
+    
     self.isWiFi = nw_path_uses_interface_type(path, nw_interface_type_wifi);
     self.isConstrained = nw_path_is_constrained(path);
     self.isExpensive = nw_path_is_expensive(path);
@@ -92,6 +108,9 @@
     
     NSArray *handlers;
     @synchronized (self) {
+        if (!_running) {
+            return;
+        }
         handlers = [[_observers objectEnumerator] allObjects];
     }
     for (void (^handler)(NetworkPathMonitor *) in handlers) {

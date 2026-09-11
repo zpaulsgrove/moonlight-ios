@@ -39,7 +39,8 @@ typedef struct {
 - (void)start;
 - (void)stop;
 
-// When YES (non-Vibepollo local fallback / poor path), soft-drop sooner on the arrival path.
+// When YES (non-Vibepollo local fallback / poor path), marks congestion for stats/logging.
+// Soft-drop pending threshold stays at 2 either way to avoid 120 Hz IDR thrash.
 @property (atomic) BOOL networkPressureMode;
 
 // Takes an immutable HDR snapshot captured on the caller's thread. Pass NULL for metadata when

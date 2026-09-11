@@ -15,7 +15,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 // Idempotent; starts nw_path_monitor on a dedicated serial queue.
 - (void)start;
-// Cancels the monitor and clears running state; keeps last known path values.
+// Cancels the monitor, clears hasPath / constrained / expensive so the next
+// session cannot reuse a stale path snapshot.
 - (void)stop;
 
 @property (atomic, readonly) BOOL isWiFi;

@@ -350,16 +350,15 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     // bout so recovery does not immediately thrash again. Frame pacing drains in order and
     // never soft-drops.
     static const int kSoftDropPendingThreshold = 2;
-    static const int kSoftDropPendingThresholdPressure = 1;
     static const uint64_t kSoftDropIdrCooldownoldownMs = 1500;
     
     int pendingFrames = LiGetPendingVideoFrames();
     NotePendingPeak(&_maxPendingFrames, pendingFrames);
     BOOL cooldownActive = nowMs < _softDropIdrCooldownoldownUntilMs;
-    int softDropThreshold = self.networkPressureMode ? kSoftDropPendingThresholdPressure
-                                                     : kSoftDropPendingThreshold;
+    // Keep threshold at 2 even under networkPressureMode. Pending==1 is normal at
+    // 120 Hz; dropping to threshold 1 reintroduces soft-drop/IDR thrash on Wi-Fi.
     BOOL dropForNewest = !framePacing && !isIdr && !cooldownActive &&
-                         pendingFrames >= softDropThreshold;
+                         pendingFrames >= kSoftDropPendingThreshold;
     BOOL dropBrokenChain = !framePacing && !isIdr && _arrivalDecodeChainBroken;
     BOOL drop = dropForNewest || dropBrokenChain;
     

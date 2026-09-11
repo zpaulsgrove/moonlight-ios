@@ -76,3 +76,18 @@ NSInteger MLNextAbrBitrate(NSInteger current,
 
     return MLClampBitrate(next, ceiling, floor);
 }
+
+NSInteger MLAbrApplyPathHint(NSInteger nextKbps, NSInteger currentKbps, BOOL pathConstrained) {
+    if (!pathConstrained) {
+        return nextKbps;
+    }
+    // Soft hint only: hold bitrate rather than ramping up on a constrained path.
+    if (nextKbps > currentKbps) {
+        return currentKbps;
+    }
+    return nextKbps;
+}
+
+BOOL MLAbrWantsNetworkPressure(BOOL wantsCut, BOOL connectionPoor) {
+    return wantsCut || connectionPoor;
+}

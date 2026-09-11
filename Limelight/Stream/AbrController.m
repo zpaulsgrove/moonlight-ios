@@ -40,7 +40,6 @@ static os_log_t AbrPerfLog(void)
     BOOL _localAdaptationActive;
     BOOL _connectionPoor;
     BOOL _pathConstrained;
-    int _stableTicks;
     NSInteger _generation;
     BOOL _applyInFlight;
     uint32_t _lastFecRecoveredFrames;
@@ -87,7 +86,10 @@ static os_log_t AbrPerfLog(void)
 }
 
 - (void)noteConnectionStatus:(int)status {
-    _connectionPoor = (status == CONN_STATUS_POOR);
+    BOOL poor = (status == CONN_STATUS_POOR);
+    dispatch_async(dispatch_get_main_queue(), ^{
+        self->_connectionPoor = poor;
+    });
 }
 
 - (void)start {
@@ -101,11 +103,14 @@ static os_log_t AbrPerfLog(void)
     _pathConstrained = pathMonitor.hasPath && (pathMonitor.isConstrained || pathMonitor.isExpensive);
     __weak AbrController *weakSelf = self;
     [pathMonitor addObserver:self handler:^(NetworkPathMonitor *monitor) {
-        AbrController *strongSelf = weakSelf;
-        if (strongSelf == nil) {
-            return;
-        }
-        strongSelf->_pathConstrained = monitor.isConstrained || monitor.isExpensive;
+        BOOL constrained = monitor.isConstrained || monitor.isExpensive;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            AbrController *strongSelf = weakSelf;
+            if (strongSelf == nil) {
+                return;
+            }
+            strongSelf->_pathConstrained = constrained;
+        });
     }];
     
     // Local adaptation always runs (host apply is optional).
@@ -150,6 +155,7 @@ static os_log_t AbrPerfLog(void)
 }
 
 - (void)stop {
+    // Generation bump is synchronous so in-flight work drops immediately.
     _generation++;
     _hostAbrSupported = NO;
     _localAdaptationActive = NO;
@@ -159,10 +165,20 @@ static os_log_t AbrPerfLog(void)
     _hasFecBaseline = NO;
     _hasBytesBaseline = NO;
     [[NetworkPathMonitor sharedMonitor] removeObserver:self];
-    VideoDecoderRenderer *renderer = _renderer;
-    renderer.networkPressureMode = NO;
-    [_timer invalidate];
-    _timer = nil;
+    
+    // NSTimer must be invalidated on the run-loop thread that owns it (main).
+    void (^teardownOnMain)(void) = ^{
+        VideoDecoderRenderer *renderer = self->_renderer;
+        renderer.networkPressureMode = NO;
+        [self->_timer invalidate];
+        self->_timer = nil;
+    };
+    if ([NSThread isMainThread]) {
+        teardownOnMain();
+    }
+    else {
+        dispatch_async(dispatch_get_main_queue(), teardownOnMain);
+    }
 }
 
 - (BOOL)isActive {
@@ -173,8 +189,17 @@ static os_log_t AbrPerfLog(void)
     return _currentKbps;
 }
 
+- (void)updatePressure:(BOOL)pressure {
+    VideoDecoderRenderer *renderer = _renderer;
+    if (renderer != nil && renderer.networkPressureMode != pressure) {
+        renderer.networkPressureMode = pressure;
+        os_log(AbrPerfLog(), "event=abr_pressure on=%{public}d hostAbr=%{public}d",
+               pressure ? 1 : 0, _hostAbrSupported ? 1 : 0);
+    }
+}
+
 - (void)tick {
-    if (!_localAdaptationActive || _applyInFlight) {
+    if (!_localAdaptationActive) {
         return;
     }
     
@@ -229,33 +254,32 @@ static os_log_t AbrPerfLog(void)
         _hasBytesBaseline = YES;
     }
     
-    BOOL poor = _connectionPoor || _pathConstrained;
-    // Sustained goodput well below target with any loss is treated as congestion.
+    // Hard poor is loss/status evidence only. Path constrained/expensive is a soft hint.
+    BOOL hardPoor = _connectionPoor;
     if (goodputKbps >= 0.0 && _currentKbps > 0 &&
         goodputKbps < (double)_currentKbps * 0.50 && dropRatePercent > 0.5f) {
-        poor = YES;
+        hardPoor = YES;
     }
     
     NSInteger next = MLNextAbrBitrate(_currentKbps, _ceilingKbps, _floorKbps,
                                       dropRatePercent, variance,
-                                      fecRepairRatePercent, queueLatencyMs, poor);
+                                      fecRepairRatePercent, queueLatencyMs, hardPoor);
+    next = MLAbrApplyPathHint(next, _currentKbps, _pathConstrained);
     
     BOOL wantsCut = next < _currentKbps;
-    BOOL pressure = wantsCut || _connectionPoor || _pathConstrained;
-    VideoDecoderRenderer *renderer = _renderer;
-    if (renderer != nil && renderer.networkPressureMode != pressure) {
-        renderer.networkPressureMode = pressure;
-        os_log(AbrPerfLog(), "event=abr_pressure on=%{public}d hostAbr=%{public}d",
-               pressure ? 1 : 0, _hostAbrSupported ? 1 : 0);
+    // Always refresh pressure, including while a host apply is in flight.
+    [self updatePressure:MLAbrWantsNetworkPressure(wantsCut, hardPoor)];
+    
+    if (_applyInFlight) {
+        return;
     }
     
     if (next == _currentKbps) {
-        _stableTicks++;
         return;
     }
     
     // Avoid tiny jittery adjustments
-    if (labs(next - _currentKbps) < MAX(_ceilingKbps / 100, 500) && dropRatePercent < 2.0f && !poor) {
+    if (labs(next - _currentKbps) < MAX(_ceilingKbps / 100, 500) && dropRatePercent < 2.0f && !hardPoor) {
         return;
     }
     
@@ -263,20 +287,19 @@ static os_log_t AbrPerfLog(void)
         // Shadow bitrate for overlay/stats; host cannot be retargeted without ABR API.
         NSInteger prev = _currentKbps;
         _currentKbps = next;
-        _stableTicks = 0;
-        Log(LOG_I, @"Local ABR shadow %ld -> %ld kbps (drops=%.2f%% fec=%.2f%% q=%.1f poor=%d)",
-            (long)prev, (long)next, dropRatePercent, fecRepairRatePercent, queueLatencyMs, poor ? 1 : 0);
+        Log(LOG_I, @"Local ABR shadow %ld -> %ld kbps (drops=%.2f%% fec=%.2f%% q=%.1f poor=%d path=%d)",
+            (long)prev, (long)next, dropRatePercent, fecRepairRatePercent, queueLatencyMs,
+            hardPoor ? 1 : 0, _pathConstrained ? 1 : 0);
         os_log(AbrPerfLog(),
-               "event=abr_local kbps=%{public}ld prev=%{public}ld drop=%.2f fec=%.2f q=%.1f var=%{public}u poor=%{public}d goodput=%.0f",
+               "event=abr_local kbps=%{public}ld prev=%{public}ld drop=%.2f fec=%.2f q=%.1f var=%{public}u poor=%{public}d path=%{public}d goodput=%.0f",
                (long)next, (long)prev, dropRatePercent, fecRepairRatePercent, queueLatencyMs,
-               variance, poor ? 1 : 0, goodputKbps);
+               variance, hardPoor ? 1 : 0, _pathConstrained ? 1 : 0, goodputKbps);
         return;
     }
     
     NSInteger target = next;
     NSInteger gen = _generation;
     _applyInFlight = YES;
-    _stableTicks = 0;
     
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         BOOL applied = [self->_http setStreamBitrateKbps:target];
