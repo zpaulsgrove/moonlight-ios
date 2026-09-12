@@ -52,3 +52,14 @@ MLSoftDropDecision MLSoftDropEvaluate(BOOL isIdr,
     d.drop = d.dropForBacklog || d.dropForAge || d.dropBrokenChain;
     return d;
 }
+
+BOOL MLPacedShouldKeepDraining(int enqueuedThisTick, int remainingQueued, int maxEnqueuesPerTick) {
+    if (enqueuedThisTick < 1) {
+        return YES;
+    }
+    if (remainingQueued <= 0) {
+        return NO;
+    }
+    int cap = maxEnqueuesPerTick > 0 ? maxEnqueuesPerTick : kMLPacedMaxEnqueuesPerTick;
+    return enqueuedThisTick < cap;
+}

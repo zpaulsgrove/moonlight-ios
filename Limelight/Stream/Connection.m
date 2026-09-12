@@ -9,7 +9,9 @@
 #import "Connection.h"
 #import "Utils.h"
 #import "NetworkPathMonitor.h"
+#import "AudioPlaybackHelpers.h"
 
+#import <AVFoundation/AVFoundation.h>
 #import <VideoToolbox/VideoToolbox.h>
 
 #define SDL_MAIN_HANDLED
@@ -195,10 +197,34 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit)
                              decodeUnit:decodeUnit];
 }
 
+static void MLApplyLowLatencyAudioSession(NSTimeInterval preferredIOBufferDuration)
+{
+    AVAudioSession *session = [AVAudioSession sharedInstance];
+    NSError *error = nil;
+    // There is no AVAudioSessionModeGame. Default plus a frame-sized IO period is the
+    // low-latency playback path. Measurement would also shrink processing but lowers output level.
+    if (![session setCategory:AVAudioSessionCategoryPlayback
+                         mode:AVAudioSessionModeDefault
+                      options:AVAudioSessionCategoryOptionMixWithOthers
+                        error:&error]) {
+        Log(LOG_W, @"AVAudioSession category/mode failed: %@", error.localizedDescription);
+    }
+    error = nil;
+    if (![session setPreferredIOBufferDuration:preferredIOBufferDuration error:&error]) {
+        Log(LOG_W, @"AVAudioSession preferredIOBufferDuration failed: %@", error.localizedDescription);
+    }
+}
+
 int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, void* context, int flags)
 {
     int err;
     SDL_AudioSpec want, have;
+    NSTimeInterval preferredIO = MLPreferredAudioIOBufferDuration(opusConfig->sampleRate,
+                                                                  opusConfig->samplesPerFrame);
+    
+    // Session must be configured before SDL opens the device so Core Audio picks the IO period.
+    MLApplyLowLatencyAudioSession(preferredIO);
+    SDL_SetHint(SDL_HINT_AUDIO_CATEGORY, "playback");
     
     if (SDL_InitSubSystem(SDL_INIT_AUDIO) < 0) {
         Log(LOG_E, @"Failed to initialize audio subsystem: %s\n", SDL_GetError());
@@ -242,8 +268,22 @@ int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, v
     // Start playback
     SDL_PauseAudioDevice(audioDevice, 0);
     
-    // Disable lowering volume of other audio streams (SDL sets AVAudioSessionCategoryOptionDuckOthers by default)
-    [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback withOptions:AVAudioSessionCategoryOptionMixWithOthers error:nil];
+    // SDL may reset category/options on open; re-apply without changing the already-opened IO size.
+    AVAudioSession *session = [AVAudioSession sharedInstance];
+    NSError *error = nil;
+    [session setCategory:AVAudioSessionCategoryPlayback
+                    mode:AVAudioSessionModeDefault
+                 options:AVAudioSessionCategoryOptionMixWithOthers
+                   error:&error];
+    if (error != nil) {
+        Log(LOG_W, @"AVAudioSession re-apply after SDL open failed: %@", error.localizedDescription);
+    }
+    
+    Log(LOG_I, @"Audio device want.samples=%d have.samples=%d preferredIO=%.4fs actualIO=%.4fs",
+        want.samples,
+        have.samples,
+        preferredIO,
+        session.IOBufferDuration);
     
     return 0;
 }
@@ -271,26 +311,31 @@ void ArCleanup(void)
 void ArDecodeAndPlaySample(char* sampleData, int sampleLength)
 {
     int decodeLen;
+    BOOL isPlc = (sampleData == NULL || sampleLength <= 0);
+    int packetMs = MLAudioPacketDurationMs(audioConfig.sampleRate, audioConfig.samplesPerFrame);
+    unsigned int queuedBytes = (audioDevice != 0) ? SDL_GetQueuedAudioSize(audioDevice) : 0;
+    int sdlMs = MLSdlQueuedAudioDurationMs(queuedBytes, audioFrameSize, packetMs);
+    int pendingMs = MLCombinedAudioPendingMs(LiGetPendingAudioDuration(), sdlMs);
     
-    // Don't queue if there's already more than 20 ms of audio data waiting
-    // in Moonlight's audio queue.
-    if (LiGetPendingAudioDuration() > 20) {
-        return;
-    }
-    
-    // Drop rather than spin if SDL already has plenty queued (avoids SDL_Delay busy-wait)
-    if (SDL_GetQueuedAudioSize(audioDevice) / audioFrameSize > 4) {
-        return;
-    }
-    
+    // Always decode (including PLC) so Opus state stays in lockstep. Skip QueueAudio
+    // only for surplus real packets so the cap cannot drop concealment.
     decodeLen = opus_multistream_decode(opusDecoder, (unsigned char *)sampleData, sampleLength,
                                         (short*)audioBuffer, audioConfig.samplesPerFrame, 0);
-    if (decodeLen > 0) {
-        if (SDL_QueueAudio(audioDevice,
-                           audioBuffer,
-                           sizeof(short) * decodeLen * audioConfig.channelCount) < 0) {
-            Log(LOG_E, @"Failed to queue audio sample: %s\n", SDL_GetError());
-        }
+    if (decodeLen < 0) {
+        Log(LOG_W, @"Opus decode failed: %d plc=%d", decodeLen, isPlc ? 1 : 0);
+        return;
+    }
+    if (decodeLen == 0) {
+        return;
+    }
+    if (!MLShouldQueueDecodedAudio(isPlc, pendingMs, kMLAudioPendingCapMs)) {
+        return;
+    }
+    
+    if (SDL_QueueAudio(audioDevice,
+                       audioBuffer,
+                       sizeof(short) * decodeLen * audioConfig.channelCount) < 0) {
+        Log(LOG_E, @"Failed to queue audio sample: %s\n", SDL_GetError());
     }
 }
 

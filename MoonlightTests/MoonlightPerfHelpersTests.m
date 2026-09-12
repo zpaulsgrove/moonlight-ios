@@ -12,6 +12,7 @@
 #import "AnnexBHelpers.h"
 #import "SoftDropHelpers.h"
 #import "Av1FormatDescCache.h"
+#import "AudioPlaybackHelpers.h"
 
 #include <Limelight.h>
 #import <CoreMedia/CoreMedia.h>
@@ -376,6 +377,57 @@
     XCTAssertFalse(notYet.rfiRecoveryCandidate);
     XCTAssertTrue(notYet.dropBrokenChain);
     XCTAssertTrue(notYet.drop);
+}
+
+- (void)testPacedShouldKeepDrainingCatchUpAndCap {
+    // Old one-per-tick policy would stop after the first enqueue.
+    XCTAssertTrue(MLPacedShouldKeepDraining(1, 5, kMLPacedMaxEnqueuesPerTick));
+    XCTAssertTrue(MLPacedShouldKeepDraining(3, 2, kMLPacedMaxEnqueuesPerTick));
+    XCTAssertFalse(MLPacedShouldKeepDraining(kMLPacedMaxEnqueuesPerTick, 8, kMLPacedMaxEnqueuesPerTick));
+    
+    // Live edge: nothing left to drain.
+    XCTAssertFalse(MLPacedShouldKeepDraining(1, 0, kMLPacedMaxEnqueuesPerTick));
+    XCTAssertFalse(MLPacedShouldKeepDraining(2, 0, kMLPacedMaxEnqueuesPerTick));
+    
+    // Have not displayed one yet.
+    XCTAssertTrue(MLPacedShouldKeepDraining(0, 0, kMLPacedMaxEnqueuesPerTick));
+    XCTAssertTrue(MLPacedShouldKeepDraining(0, 4, kMLPacedMaxEnqueuesPerTick));
+    
+    // Invalid cap falls back to the default of 4.
+    XCTAssertTrue(MLPacedShouldKeepDraining(3, 1, 0));
+    XCTAssertFalse(MLPacedShouldKeepDraining(4, 1, 0));
+}
+
+- (void)testAudioPreferredIOBufferDuration {
+    XCTAssertEqualWithAccuracy(MLPreferredAudioIOBufferDuration(48000, 240), 0.005, 0.0001);
+    XCTAssertEqualWithAccuracy(MLPreferredAudioIOBufferDuration(48000, 480), 0.010, 0.0001);
+    XCTAssertEqualWithAccuracy(MLPreferredAudioIOBufferDuration(48000, 48), 0.0025, 0.0001); // floor
+    XCTAssertEqualWithAccuracy(MLPreferredAudioIOBufferDuration(48000, 960), 0.010, 0.0001); // ceiling
+    XCTAssertEqualWithAccuracy(MLPreferredAudioIOBufferDuration(0, 240), 0.005, 0.0001);
+    XCTAssertEqualWithAccuracy(MLPreferredAudioIOBufferDuration(48000, 0), 0.005, 0.0001);
+}
+
+- (void)testAudioPendingMsAndQueuePolicy {
+    XCTAssertEqual(MLAudioPacketDurationMs(48000, 240), 5);
+    XCTAssertEqual(MLAudioPacketDurationMs(48000, 480), 10);
+    XCTAssertEqual(MLAudioPacketDurationMs(0, 240), 5);
+    
+    // 4 frames of 5 ms = 20 ms.
+    XCTAssertEqual(MLSdlQueuedAudioDurationMs(4 * 1920, 1920, 5), 20);
+    XCTAssertEqual(MLSdlQueuedAudioDurationMs(0, 1920, 5), 0);
+    XCTAssertEqual(MLSdlQueuedAudioDurationMs(100, 0, 5), 0);
+    
+    XCTAssertEqual(MLCombinedAudioPendingMs(15, 10), 25);
+    XCTAssertEqual(MLCombinedAudioPendingMs(-3, 10), 10);
+    
+    // PLC must queue even when far over the cap (old code returned before decode).
+    XCTAssertTrue(MLShouldQueueDecodedAudio(YES, 100, kMLAudioPendingCapMs));
+    XCTAssertTrue(MLShouldQueueDecodedAudio(YES, 0, kMLAudioPendingCapMs));
+    
+    XCTAssertTrue(MLShouldQueueDecodedAudio(NO, 20, kMLAudioPendingCapMs));
+    XCTAssertFalse(MLShouldQueueDecodedAudio(NO, 21, kMLAudioPendingCapMs));
+    XCTAssertFalse(MLShouldQueueDecodedAudio(NO, 25, kMLAudioPendingCapMs));
+    XCTAssertTrue(MLShouldQueueDecodedAudio(NO, 0, kMLAudioPendingCapMs));
 }
 
 - (void)testAv1FormatDescCacheHitMissAndInvalidate {

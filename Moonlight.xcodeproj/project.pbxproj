@@ -13,6 +13,9 @@
 		A1B2C3D4E5F60718293A4B24 /* SoftDropHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B22 /* SoftDropHelpers.m */; };
 		A1B2C3D4E5F60718293A4B25 /* SoftDropHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B22 /* SoftDropHelpers.m */; };
 		A1B2C3D4E5F60718293A4B26 /* SoftDropHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B22 /* SoftDropHelpers.m */; };
+		A1B2C3D4E5F60718293A4B52 /* AudioPlaybackHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B50 /* AudioPlaybackHelpers.m */; };
+		A1B2C3D4E5F60718293A4B53 /* AudioPlaybackHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B50 /* AudioPlaybackHelpers.m */; };
+		A1B2C3D4E5F60718293A4B54 /* AudioPlaybackHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B50 /* AudioPlaybackHelpers.m */; };
 		A1B2C3D4E5F60718293A4B30 /* Av1FormatDescCache.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B2E /* Av1FormatDescCache.m */; };
 		A1B2C3D4E5F60718293A4B31 /* Av1FormatDescCache.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B2E /* Av1FormatDescCache.m */; };
 		A1B2C3D4E5F60718293A4B32 /* Av1FormatDescCache.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B2E /* Av1FormatDescCache.m */; };
@@ -204,6 +207,8 @@
 		A1B2C3D4E5F60718293A4B12 /* AbrBitrateHelpers.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AbrBitrateHelpers.h; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B22 /* SoftDropHelpers.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SoftDropHelpers.m; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B23 /* SoftDropHelpers.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SoftDropHelpers.h; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B50 /* AudioPlaybackHelpers.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AudioPlaybackHelpers.m; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B51 /* AudioPlaybackHelpers.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AudioPlaybackHelpers.h; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B2E /* Av1FormatDescCache.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Av1FormatDescCache.m; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B2F /* Av1FormatDescCache.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Av1FormatDescCache.h; sourceTree = "<group>"; };
 		A1B2C3D4E5F60718293A4B1D /* NetworkPathMonitor.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = NetworkPathMonitor.m; sourceTree = "<group>"; };
@@ -634,6 +639,8 @@
 				A1B2C3D4E5F60718293A4B11 /* AbrBitrateHelpers.m */,
 				A1B2C3D4E5F60718293A4B23 /* SoftDropHelpers.h */,
 				A1B2C3D4E5F60718293A4B22 /* SoftDropHelpers.m */,
+				A1B2C3D4E5F60718293A4B51 /* AudioPlaybackHelpers.h */,
+				A1B2C3D4E5F60718293A4B50 /* AudioPlaybackHelpers.m */,
 				A1B2C3D4E5F60718293A4B2F /* Av1FormatDescCache.h */,
 				A1B2C3D4E5F60718293A4B2E /* Av1FormatDescCache.m */,
 				A1B2C3D4E5F60718293A4B1A /* HdrMetadataHelpers.h */,
@@ -1001,6 +1008,7 @@
 				A1B2C3D4E5F60718293A4B08 /* AnnexBHelpers.m in Sources */,
 				A1B2C3D4E5F60718293A4B14 /* AbrBitrateHelpers.m in Sources */,
 				A1B2C3D4E5F60718293A4B25 /* SoftDropHelpers.m in Sources */,
+				A1B2C3D4E5F60718293A4B53 /* AudioPlaybackHelpers.m in Sources */,
 				A1B2C3D4E5F60718293A4B31 /* Av1FormatDescCache.m in Sources */,
 				A1B2C3D4E5F60718293A4B1B /* HdrMetadataHelpers.m in Sources */,
 				B7C1D2E3F4A5061728394505 /* StatsOverlayFormatting.m in Sources */,
@@ -1030,6 +1038,7 @@
 				A1B2C3D4E5F60718293A4B07 /* AnnexBHelpers.m in Sources */,
 				A1B2C3D4E5F60718293A4B13 /* AbrBitrateHelpers.m in Sources */,
 				A1B2C3D4E5F60718293A4B24 /* SoftDropHelpers.m in Sources */,
+				A1B2C3D4E5F60718293A4B52 /* AudioPlaybackHelpers.m in Sources */,
 				A1B2C3D4E5F60718293A4B30 /* Av1FormatDescCache.m in Sources */,
 				A1B2C3D4E5F60718293A4B1C /* HdrMetadataHelpers.m in Sources */,
 				B7C1D2E3F4A5061728394504 /* StatsOverlayFormatting.m in Sources */,
@@ -1085,6 +1094,7 @@
 				B7C1D2E3F4A506172839450B /* MoonlightHdrMetadataTests.m in Sources */,
 				A1B2C3D4E5F60718293A4B15 /* AbrBitrateHelpers.m in Sources */,
 				A1B2C3D4E5F60718293A4B26 /* SoftDropHelpers.m in Sources */,
+				A1B2C3D4E5F60718293A4B54 /* AudioPlaybackHelpers.m in Sources */,
 				A1B2C3D4E5F60718293A4B32 /* Av1FormatDescCache.m in Sources */,
 				B7C1D2E3F4A5061728394506 /* StatsOverlayFormatting.m in Sources */,
 				B7C1D2E3F4A5061728394509 /* HdrMetadataHelpers.m in Sources */,
