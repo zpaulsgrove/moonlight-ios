@@ -9,6 +9,7 @@
 #import "SettingsViewController.h"
 #import "TemporarySettings.h"
 #import "DataManager.h"
+#import "AudioPlaybackHelpers.h"
 
 #import <VideoToolbox/VideoToolbox.h>
 #import <AVFoundation/AVFoundation.h>
@@ -16,6 +17,8 @@
 @interface SettingsViewController ()
 @property (nonatomic, strong) UISegmentedControl *aggressiveWifiPacketsSelector;
 @property (nonatomic, strong) UISegmentedControl *disableEncryptionOnLanSelector;
+@property (nonatomic, strong) UISegmentedControl *audioConfigSelector;
+@property (nonatomic, strong) UISegmentedControl *preferHighQualityAudioSelector;
 @end
 
 @implementation SettingsViewController {
@@ -307,6 +310,10 @@ BOOL isCustomResolution(CGSize res) {
     if (self.aggressiveWifiPacketsSelector != nil) {
         self.aggressiveWifiPacketsSelector.selectedSegmentIndex = currentSettings.aggressiveWifiPackets ? 1 : 0;
         self.disableEncryptionOnLanSelector.selectedSegmentIndex = currentSettings.disableEncryptionOnLan ? 1 : 0;
+        self.audioConfigSelector.selectedSegmentIndex =
+            MLAudioConfigSegmentIndex([currentSettings.audioConfig intValue]);
+        self.preferHighQualityAudioSelector.selectedSegmentIndex =
+            currentSettings.preferHighQualityAudio ? 1 : 0;
         return;
     }
     
@@ -318,6 +325,46 @@ BOOL isCustomResolution(CGSize res) {
     CGFloat controlX = anchorFrame.origin.x;
     CGFloat labelX = controlX + 6;
     CGFloat y = CGRectGetMaxY(anchorFrame) + 40;
+    
+    UILabel *audioConfigLabel = [[UILabel alloc] initWithFrame:CGRectMake(labelX, y, controlWidth - 6, 21)];
+    audioConfigLabel.text = @"Audio Configuration";
+    audioConfigLabel.font = [UIFont boldSystemFontOfSize:17];
+    audioConfigLabel.textColor = labelColor;
+    [self.scrollView addSubview:audioConfigLabel];
+    
+    self.audioConfigSelector = [[UISegmentedControl alloc] initWithItems:@[@"Stereo", @"5.1", @"7.1"]];
+    self.audioConfigSelector.frame = CGRectMake(controlX, y + 29, controlWidth, 28);
+    self.audioConfigSelector.selectedSegmentIndex =
+        MLAudioConfigSegmentIndex([currentSettings.audioConfig intValue]);
+    self.audioConfigSelector.tintColor = tintColor;
+    if (@available(iOS 13.0, *)) {
+        self.audioConfigSelector.selectedSegmentTintColor = tintColor;
+    }
+    self.audioConfigSelector.accessibilityLabel = @"Audio Configuration";
+    self.audioConfigSelector.accessibilityHint = @"Stereo for headphones. 5.1 or 7.1 when the output supports surround.";
+    [self.scrollView addSubview:self.audioConfigSelector];
+    
+    y = CGRectGetMaxY(self.audioConfigSelector.frame) + 36;
+    
+    UILabel *hqAudioLabel = [[UILabel alloc] initWithFrame:CGRectMake(labelX, y, controlWidth - 6, 21)];
+    hqAudioLabel.text = @"High Quality Opus";
+    hqAudioLabel.font = [UIFont boldSystemFontOfSize:17];
+    hqAudioLabel.textColor = labelColor;
+    [self.scrollView addSubview:hqAudioLabel];
+    
+    self.preferHighQualityAudioSelector = [[UISegmentedControl alloc] initWithItems:@[@"No", @"Yes"]];
+    self.preferHighQualityAudioSelector.frame = CGRectMake(controlX, y + 29, controlWidth, 28);
+    self.preferHighQualityAudioSelector.selectedSegmentIndex = currentSettings.preferHighQualityAudio ? 1 : 0;
+    self.preferHighQualityAudioSelector.tintColor = tintColor;
+    if (@available(iOS 13.0, *)) {
+        self.preferHighQualityAudioSelector.selectedSegmentTintColor = tintColor;
+    }
+    self.preferHighQualityAudioSelector.accessibilityLabel = @"High Quality Opus";
+    self.preferHighQualityAudioSelector.accessibilityHint =
+        @"Requests 512 kbps stereo or uncoupled surround Opus from the host. Uses more bandwidth.";
+    [self.scrollView addSubview:self.preferHighQualityAudioSelector];
+    
+    y = CGRectGetMaxY(self.preferHighQualityAudioSelector.frame) + 36;
     
     UILabel *wifiLabel = [[UILabel alloc] initWithFrame:CGRectMake(labelX, y, controlWidth - 6, 21)];
     wifiLabel.text = @"Larger Wi-Fi Packets";
@@ -655,11 +702,17 @@ BOOL isCustomResolution(CGSize res) {
         [self.aggressiveWifiPacketsSelector selectedSegmentIndex] == 1;
     BOOL disableEncryptionOnLan = self.disableEncryptionOnLanSelector != nil &&
         [self.disableEncryptionOnLanSelector selectedSegmentIndex] == 1;
+    NSInteger audioConfig = 2;
+    if (self.audioConfigSelector != nil) {
+        audioConfig = MLAudioConfigChannelsForSegment((int)self.audioConfigSelector.selectedSegmentIndex);
+    }
+    BOOL preferHighQualityAudio = self.preferHighQualityAudioSelector == nil ||
+        [self.preferHighQualityAudioSelector selectedSegmentIndex] == 1;
     [dataMan saveSettingsWithBitrate:_bitrate
                            framerate:framerate
                               height:height
                                width:width
-                         audioConfig:2 // Stereo
+                         audioConfig:audioConfig
                     onscreenControls:onscreenControls
                        optimizeGames:optimizeGames
                      multiController:multiController
@@ -672,7 +725,8 @@ BOOL isCustomResolution(CGSize res) {
                    absoluteTouchMode:absoluteTouchMode
                    statsOverlayLevel:statsOverlayLevel
                aggressiveWifiPackets:aggressiveWifiPackets
-              disableEncryptionOnLan:disableEncryptionOnLan];
+              disableEncryptionOnLan:disableEncryptionOnLan
+             preferHighQualityAudio:preferHighQualityAudio];
 }
 
 - (MLStatsOverlayLevel) getChosenStatsOverlayLevel {

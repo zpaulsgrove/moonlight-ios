@@ -300,11 +300,14 @@ int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, v
     (void)MLSetPreferredIOBufferDuration(session, preferredIO);
     
     NSTimeInterval actualIO = session.IOBufferDuration;
-    Log(LOG_I, @"Audio device want.samples=%d have.samples=%d preferredIO=%.4fs actualIO=%.4fs",
+    Log(LOG_I, @"Audio device want.samples=%d have.samples=%d preferredIO=%.4fs actualIO=%.4fs channels=%d streams=%d coupled=%d",
         want.samples,
         have.samples,
         preferredIO,
-        actualIO);
+        actualIO,
+        opusConfig->channelCount,
+        opusConfig->streams,
+        opusConfig->coupledStreams);
     if (actualIO > preferredIO + 0.002) {
         Log(LOG_E, @"AVAudioSession IOBufferDuration still high (%.4fs vs preferred %.4fs)",
             actualIO, preferredIO);
@@ -519,8 +522,12 @@ void ClSetControllerLED(uint16_t controllerNumber, uint8_t r, uint8_t g, uint8_t
     _streamConfig.bitrate = config.bitRate;
     _streamConfig.supportedVideoFormats = config.supportedVideoFormats;
     _streamConfig.audioConfiguration = config.audioConfiguration;
+    _streamConfig.audioQuality = config.audioQuality;
     _streamConfig.colorSpace = COLORSPACE_REC_709;
     _streamConfig.colorRange = COLOR_RANGE_FULL;
+    
+    Log(LOG_I, @"Stream audioConfiguration=%d audioQuality=%d bitrate=%d",
+        config.audioConfiguration, config.audioQuality, config.bitRate);
     
     // Advertise client refresh so Vibepollo/Sunshine can pace to the panel
     int displayHz = 60;

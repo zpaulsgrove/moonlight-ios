@@ -450,6 +450,28 @@
     XCTAssertFalse(MLShouldQueueDecodedAudio(NO, 21, -1));
 }
 
+- (void)testAudioConfigChannelAndQualityMapping {
+    XCTAssertEqual(MLNormalizedAudioChannelCount(2), 2);
+    XCTAssertEqual(MLNormalizedAudioChannelCount(6), 6);
+    XCTAssertEqual(MLNormalizedAudioChannelCount(8), 8);
+    XCTAssertEqual(MLNormalizedAudioChannelCount(1), 2);
+    XCTAssertEqual(MLNormalizedAudioChannelCount(7), 6);
+    XCTAssertEqual(MLNormalizedAudioChannelCount(99), 8);
+    
+    XCTAssertEqual(MLAudioConfigSegmentIndex(2), 0);
+    XCTAssertEqual(MLAudioConfigSegmentIndex(6), 1);
+    XCTAssertEqual(MLAudioConfigSegmentIndex(8), 2);
+    
+    XCTAssertEqual(MLAudioConfigChannelsForSegment(0), 2);
+    XCTAssertEqual(MLAudioConfigChannelsForSegment(1), 6);
+    XCTAssertEqual(MLAudioConfigChannelsForSegment(2), 8);
+    XCTAssertEqual(MLAudioConfigChannelsForSegment(-1), 2);
+    
+    // Matches AUDIO_QUALITY_HIGH / AUDIO_QUALITY_NORMAL in Limelight.h.
+    XCTAssertEqual(MLStreamAudioQualityMode(YES), 1);
+    XCTAssertEqual(MLStreamAudioQualityMode(NO), 2);
+}
+
 - (void)testAv1FormatDescCacheHitMissAndInvalidate {
     Av1FormatDescCache *cache = [[Av1FormatDescCache alloc] init];
     CMVideoFormatDescriptionRef desc = NULL;

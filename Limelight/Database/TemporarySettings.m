@@ -49,6 +49,9 @@
         ? MLStatsOverlayLevelFull : MLStatsOverlayLevelOff;
     self.aggressiveWifiPackets = [[NSUserDefaults standardUserDefaults] boolForKey:@"aggressiveWifiPackets"];
     self.disableEncryptionOnLan = [[NSUserDefaults standardUserDefaults] boolForKey:@"disableEncryptionOnLan"];
+    // Default YES when the key has never been written (matches Core Data default).
+    id hqPref = [[NSUserDefaults standardUserDefaults] objectForKey:@"preferHighQualityAudio"];
+    self.preferHighQualityAudio = (hqPref == nil) ? YES : [hqPref boolValue];
     
     NSInteger _screenSize = [[NSUserDefaults standardUserDefaults] integerForKey:@"streamResolution"];
     switch (_screenSize) {
@@ -91,6 +94,7 @@
     self.statsOverlayLevel = (MLStatsOverlayLevel)settings.statsOverlayLevel;
     self.aggressiveWifiPackets = settings.aggressiveWifiPackets;
     self.disableEncryptionOnLan = settings.disableEncryptionOnLan;
+    self.preferHighQualityAudio = settings.preferHighQualityAudio;
 #endif
     self.uniqueId = settings.uniqueId;
     

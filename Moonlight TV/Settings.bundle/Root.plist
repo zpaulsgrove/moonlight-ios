@@ -120,6 +120,16 @@
 		</dict>
 		<dict>
 			<key>Type</key>
+			<string>PSToggleSwitchSpecifier</string>
+			<key>DefaultValue</key>
+			<true/>
+			<key>Title</key>
+			<string>High Quality Opus</string>
+			<key>Key</key>
+			<string>preferHighQualityAudio</string>
+		</dict>
+		<dict>
+			<key>Type</key>
 			<string>PSGroupSpecifier</string>
 			<key>Title</key>
 			<string>Host Options</string>

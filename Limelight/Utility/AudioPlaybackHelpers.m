@@ -47,3 +47,40 @@ BOOL MLShouldQueueDecodedAudio(BOOL isPlc, int combinedPendingMs, int capMs) {
     int cap = capMs > 0 ? capMs : kMLAudioPendingCapMs;
     return combinedPendingMs <= cap;
 }
+
+int MLNormalizedAudioChannelCount(int audioConfigChannels) {
+    if (audioConfigChannels >= 8) {
+        return 8;
+    }
+    if (audioConfigChannels >= 6) {
+        return 6;
+    }
+    return 2;
+}
+
+int MLAudioConfigSegmentIndex(int audioConfigChannels) {
+    int channels = MLNormalizedAudioChannelCount(audioConfigChannels);
+    if (channels >= 8) {
+        return 2;
+    }
+    if (channels >= 6) {
+        return 1;
+    }
+    return 0;
+}
+
+int MLAudioConfigChannelsForSegment(int segmentIndex) {
+    switch (segmentIndex) {
+        case 2:
+            return 8;
+        case 1:
+            return 6;
+        default:
+            return 2;
+    }
+}
+
+int MLStreamAudioQualityMode(BOOL preferHighQuality) {
+    // Matches AUDIO_QUALITY_HIGH / AUDIO_QUALITY_NORMAL in Limelight.h.
+    return preferHighQuality ? 1 : 2;
+}

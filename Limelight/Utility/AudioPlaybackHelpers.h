@@ -27,4 +27,15 @@ FOUNDATION_EXPORT int MLAudioPacketDurationMs(int sampleRate, int samplesPerFram
 // Always queue PLC. Queue real packets only when combined pending is within the cap.
 FOUNDATION_EXPORT BOOL MLShouldQueueDecodedAudio(BOOL isPlc, int combinedPendingMs, int capMs);
 
+// Normalize a saved audioConfig channel count to 2, 6, or 8 (stereo / 5.1 / 7.1).
+FOUNDATION_EXPORT int MLNormalizedAudioChannelCount(int audioConfigChannels);
+
+// Settings segment index: 0 = Stereo, 1 = 5.1, 2 = 7.1.
+FOUNDATION_EXPORT int MLAudioConfigSegmentIndex(int audioConfigChannels);
+FOUNDATION_EXPORT int MLAudioConfigChannelsForSegment(int segmentIndex);
+
+// Map the Settings toggle to STREAM_CONFIGURATION.audioQuality
+// (AUDIO_QUALITY_HIGH when YES, AUDIO_QUALITY_NORMAL when NO).
+FOUNDATION_EXPORT int MLStreamAudioQualityMode(BOOL preferHighQuality);
+
 NS_ASSUME_NONNULL_END

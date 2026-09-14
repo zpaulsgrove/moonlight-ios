@@ -69,7 +69,8 @@
                absoluteTouchMode:(BOOL)absoluteTouchMode
                statsOverlayLevel:(MLStatsOverlayLevel)statsOverlayLevel
            aggressiveWifiPackets:(BOOL)aggressiveWifiPackets
-          disableEncryptionOnLan:(BOOL)disableEncryptionOnLan {
+          disableEncryptionOnLan:(BOOL)disableEncryptionOnLan
+         preferHighQualityAudio:(BOOL)preferHighQualityAudio {
     
     [_managedObjectContext performBlockAndWait:^{
         Settings* settingsToSave = [self retrieveSettings];
@@ -94,6 +95,7 @@
         settingsToSave.statsOverlay = statsOverlayLevel != MLStatsOverlayLevelOff;
         settingsToSave.aggressiveWifiPackets = aggressiveWifiPackets;
         settingsToSave.disableEncryptionOnLan = disableEncryptionOnLan;
+        settingsToSave.preferHighQualityAudio = preferHighQualityAudio;
         
         [self saveData];
     }];
