@@ -42,5 +42,5 @@ typedef struct {
 @end
 
 // Called on the submission thread for every waited/polled frame. Records client queue wait
-// (LiGetMillis() - decodeUnit.enqueueTimeMs) into the current 0.5s video stats window.
+// (LiGetMicroseconds() - decodeUnit.enqueueTimeUs) into the current 0.5s video stats window.
 FOUNDATION_EXPORT void DrNoteClientQueueAgeMs(uint64_t ageMs);

@@ -391,9 +391,11 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
 {
     os_signpost_id_t signpostId = os_signpost_id_generate(VideoRendererSignpostLog());
     
-    // Recapture the clock here rather than at loop entry so frame age is measured truthfully
-    uint64_t nowMs = LiGetMillis();
-    uint64_t frameAgeMs = (nowMs > du->enqueueTimeMs) ? (nowMs - du->enqueueTimeMs) : 0;
+    // Recapture the clock here rather than at loop entry so frame age is measured truthfully.
+    // DECODE_UNIT timestamps are microseconds; compare against LiGetMicroseconds().
+    uint64_t nowUs = LiGetMicroseconds();
+    uint64_t nowMs = nowUs / 1000;
+    uint64_t frameAgeMs = (nowUs > du->enqueueTimeUs) ? ((nowUs - du->enqueueTimeUs) / 1000) : 0;
     
     // Never skip-decode IDRs: LiCompleteVideoFrame(DR_OK) would mark idrFrameProcessed
     // without a real decode and leave later P-frames without a keyframe.
@@ -992,7 +994,7 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
         
     CMSampleBufferRef sampleBuffer;
     
-    CMSampleTimingInfo sampleTiming = {kCMTimeInvalid, CMTimeMake(du->presentationTimeMs, 1000), kCMTimeInvalid};
+    CMSampleTimingInfo sampleTiming = {kCMTimeInvalid, CMTimeMake((int64_t)du->presentationTimeUs, 1000000), kCMTimeInvalid};
     
     // CMSampleBufferCreateReady does not retain the format description until it returns, so
     // hold our own reference across the call.
