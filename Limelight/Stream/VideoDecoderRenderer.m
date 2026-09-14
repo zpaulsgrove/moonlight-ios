@@ -352,14 +352,33 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     
     [self applyPendingHdrUpdate];
     
-    // Drain soft-dropped P-frames toward the newest (or an under-age) frame, then enqueue at
-    // most one sample per tick. Refresh dips must not flood ASBDL with the whole FIFO.
+    // Decode in order (no soft-drop on the paced path). Catch up by enqueueing extra
+    // frames this vsync, capped so a refresh dip cannot dump the whole FIFO into ASBDL.
+    // Leave frames queued when ASBDL is already full so P-frames are not completed as
+    // DR_OK without decode (submitFrame Dropped path).
+    AVSampleBufferVideoRenderer* renderer = [self currentVideoRenderer:NULL];
+    if (renderer == nil || ![renderer isReadyForMoreMediaData]) {
+        os_signpost_interval_end(VideoRendererSignpostLog(), signpostId, "DisplayLinkCallback");
+        return;
+    }
+    
     VIDEO_FRAME_HANDLE handle;
     PDECODE_UNIT du;
+    int enqueuedThisTick = 0;
     while (LiPollNextVideoFrame(&handle, &du)) {
         MLEnqueueResult result = [self submitFrame:handle decodeUnit:du];
+        if (result != MLEnqueueResultEnqueued) {
+            // Saturation or NeedsIdr: stop so later P-frames stay queued for the next tick.
+            break;
+        }
         
-        if (result == MLEnqueueResultEnqueued) {
+        enqueuedThisTick++;
+        renderer = [self currentVideoRenderer:NULL];
+        BOOL rendererReady = (renderer != nil && [renderer isReadyForMoreMediaData]);
+        if (!MLPacedShouldPollNextFrame(enqueuedThisTick,
+                                        LiGetPendingVideoFrames(),
+                                        kMLPacedMaxEnqueuesPerTick,
+                                        rendererReady)) {
             break;
         }
     }

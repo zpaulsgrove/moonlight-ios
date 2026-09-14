@@ -36,6 +36,7 @@
 @property (nonatomic) BOOL absoluteTouchMode;
 @property (nonatomic) BOOL aggressiveWifiPackets;
 @property (nonatomic) BOOL disableEncryptionOnLan;
+@property (nonatomic) BOOL preferHighQualityAudio;
 @property (nonatomic) MLStatsOverlayLevel statsOverlayLevel;
 
 - (id) initFromSettings:(Settings*)settings;

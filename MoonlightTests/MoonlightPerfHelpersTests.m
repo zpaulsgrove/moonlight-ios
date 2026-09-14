@@ -12,6 +12,7 @@
 #import "AnnexBHelpers.h"
 #import "SoftDropHelpers.h"
 #import "Av1FormatDescCache.h"
+#import "AudioPlaybackHelpers.h"
 
 #include <Limelight.h>
 #import <CoreMedia/CoreMedia.h>
@@ -376,6 +377,99 @@
     XCTAssertFalse(notYet.rfiRecoveryCandidate);
     XCTAssertTrue(notYet.dropBrokenChain);
     XCTAssertTrue(notYet.drop);
+}
+
+- (void)testPacedShouldKeepDrainingCatchUpAndCap {
+    // Old one-per-tick policy would stop after the first enqueue.
+    XCTAssertTrue(MLPacedShouldKeepDraining(1, 5, kMLPacedMaxEnqueuesPerTick));
+    XCTAssertTrue(MLPacedShouldKeepDraining(3, 2, kMLPacedMaxEnqueuesPerTick));
+    XCTAssertFalse(MLPacedShouldKeepDraining(kMLPacedMaxEnqueuesPerTick, 8, kMLPacedMaxEnqueuesPerTick));
+    
+    // Live edge: nothing left to drain.
+    XCTAssertFalse(MLPacedShouldKeepDraining(1, 0, kMLPacedMaxEnqueuesPerTick));
+    XCTAssertFalse(MLPacedShouldKeepDraining(2, 0, kMLPacedMaxEnqueuesPerTick));
+    
+    // Have not displayed one yet.
+    XCTAssertTrue(MLPacedShouldKeepDraining(0, 0, kMLPacedMaxEnqueuesPerTick));
+    XCTAssertTrue(MLPacedShouldKeepDraining(0, 4, kMLPacedMaxEnqueuesPerTick));
+    
+    // Invalid cap falls back to the default of 4.
+    XCTAssertTrue(MLPacedShouldKeepDraining(3, 1, 0));
+    XCTAssertFalse(MLPacedShouldKeepDraining(4, 1, 0));
+}
+
+- (void)testPacedShouldPollNextFrameRequiresRendererReady {
+    // Cap and remaining would allow another poll, but ASBDL not ready must stop.
+    XCTAssertFalse(MLPacedShouldPollNextFrame(1, 5, kMLPacedMaxEnqueuesPerTick, NO));
+    XCTAssertTrue(MLPacedShouldPollNextFrame(1, 5, kMLPacedMaxEnqueuesPerTick, YES));
+    
+    // Live edge still stops even when ready.
+    XCTAssertFalse(MLPacedShouldPollNextFrame(1, 0, kMLPacedMaxEnqueuesPerTick, YES));
+    
+    // Hit the per-tick cap.
+    XCTAssertFalse(MLPacedShouldPollNextFrame(kMLPacedMaxEnqueuesPerTick, 8, kMLPacedMaxEnqueuesPerTick, YES));
+}
+
+- (void)testAudioPreferredIOBufferDuration {
+    XCTAssertEqualWithAccuracy(MLPreferredAudioIOBufferDuration(48000, 240), 0.005, 0.0001);
+    XCTAssertEqualWithAccuracy(MLPreferredAudioIOBufferDuration(48000, 480), 0.010, 0.0001);
+    XCTAssertEqualWithAccuracy(MLPreferredAudioIOBufferDuration(48000, 48), 0.0025, 0.0001); // floor
+    XCTAssertEqualWithAccuracy(MLPreferredAudioIOBufferDuration(48000, 960), 0.010, 0.0001); // ceiling
+    XCTAssertEqualWithAccuracy(MLPreferredAudioIOBufferDuration(0, 240), 0.005, 0.0001);
+    XCTAssertEqualWithAccuracy(MLPreferredAudioIOBufferDuration(48000, 0), 0.005, 0.0001);
+}
+
+- (void)testAudioPendingMsAndQueuePolicy {
+    XCTAssertEqual(MLAudioPacketDurationMs(48000, 240), 5);
+    XCTAssertEqual(MLAudioPacketDurationMs(48000, 480), 10);
+    XCTAssertEqual(MLAudioPacketDurationMs(0, 240), 5);
+    
+    // 4 frames of 5 ms = 20 ms.
+    XCTAssertEqual(MLSdlQueuedAudioDurationMs(4 * 1920, 1920, 5), 20);
+    XCTAssertEqual(MLSdlQueuedAudioDurationMs(0, 1920, 5), 0);
+    XCTAssertEqual(MLSdlQueuedAudioDurationMs(100, 0, 5), 0);
+    // Partial frames truncate; one full frame plus half still counts as 5 ms.
+    XCTAssertEqual(MLSdlQueuedAudioDurationMs(1920, 1920, 5), 5);
+    XCTAssertEqual(MLSdlQueuedAudioDurationMs(1920 + 960, 1920, 5), 5);
+    
+    XCTAssertEqual(MLCombinedAudioPendingMs(15, 10), 25);
+    XCTAssertEqual(MLCombinedAudioPendingMs(-3, 10), 10);
+    
+    // PLC must queue even when far over the cap (old code returned before decode).
+    XCTAssertTrue(MLShouldQueueDecodedAudio(YES, 100, kMLAudioPendingCapMs));
+    XCTAssertTrue(MLShouldQueueDecodedAudio(YES, 0, kMLAudioPendingCapMs));
+    
+    XCTAssertTrue(MLShouldQueueDecodedAudio(NO, 20, kMLAudioPendingCapMs));
+    XCTAssertFalse(MLShouldQueueDecodedAudio(NO, 21, kMLAudioPendingCapMs));
+    XCTAssertFalse(MLShouldQueueDecodedAudio(NO, 25, kMLAudioPendingCapMs));
+    XCTAssertTrue(MLShouldQueueDecodedAudio(NO, 0, kMLAudioPendingCapMs));
+    
+    // Invalid cap falls back to kMLAudioPendingCapMs (20).
+    XCTAssertTrue(MLShouldQueueDecodedAudio(NO, 20, 0));
+    XCTAssertFalse(MLShouldQueueDecodedAudio(NO, 21, 0));
+    XCTAssertFalse(MLShouldQueueDecodedAudio(NO, 21, -1));
+}
+
+- (void)testAudioConfigChannelAndQualityMapping {
+    XCTAssertEqual(MLNormalizedAudioChannelCount(2), 2);
+    XCTAssertEqual(MLNormalizedAudioChannelCount(6), 6);
+    XCTAssertEqual(MLNormalizedAudioChannelCount(8), 8);
+    XCTAssertEqual(MLNormalizedAudioChannelCount(1), 2);
+    XCTAssertEqual(MLNormalizedAudioChannelCount(7), 6);
+    XCTAssertEqual(MLNormalizedAudioChannelCount(99), 8);
+    
+    XCTAssertEqual(MLAudioConfigSegmentIndex(2), 0);
+    XCTAssertEqual(MLAudioConfigSegmentIndex(6), 1);
+    XCTAssertEqual(MLAudioConfigSegmentIndex(8), 2);
+    
+    XCTAssertEqual(MLAudioConfigChannelsForSegment(0), 2);
+    XCTAssertEqual(MLAudioConfigChannelsForSegment(1), 6);
+    XCTAssertEqual(MLAudioConfigChannelsForSegment(2), 8);
+    XCTAssertEqual(MLAudioConfigChannelsForSegment(-1), 2);
+    
+    // Matches AUDIO_QUALITY_HIGH / AUDIO_QUALITY_NORMAL in Limelight.h.
+    XCTAssertEqual(MLStreamAudioQualityMode(YES), 1);
+    XCTAssertEqual(MLStreamAudioQualityMode(NO), 2);
 }
 
 - (void)testAv1FormatDescCacheHitMissAndInvalidate {

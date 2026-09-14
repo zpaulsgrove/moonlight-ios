@@ -30,7 +30,8 @@
                absoluteTouchMode:(BOOL)absoluteTouchMode
                statsOverlayLevel:(MLStatsOverlayLevel)statsOverlayLevel
            aggressiveWifiPackets:(BOOL)aggressiveWifiPackets
-          disableEncryptionOnLan:(BOOL)disableEncryptionOnLan;
+          disableEncryptionOnLan:(BOOL)disableEncryptionOnLan
+         preferHighQualityAudio:(BOOL)preferHighQualityAudio;
 
 - (NSArray*) getHosts;
 - (void) updateHost:(TemporaryHost*)host;

@@ -18,6 +18,7 @@
 #import "DataManager.h"
 #import "TemporarySettings.h"
 #import "WakeOnLanManager.h"
+#import "AudioPlaybackHelpers.h"
 #import "AppListResponse.h"
 #import "ServerInfoResponse.h"
 #import "StreamFrameViewController.h"
@@ -655,6 +656,7 @@ static NSMutableSet* hostList;
     _streamConfig.swapABXYButtons = streamSettings.swapABXYButtons;
     _streamConfig.aggressiveWifiPackets = streamSettings.aggressiveWifiPackets;
     _streamConfig.disableEncryptionOnLan = streamSettings.disableEncryptionOnLan;
+    _streamConfig.audioQuality = MLStreamAudioQualityMode(streamSettings.preferHighQualityAudio);
     
     // multiController must be set before calling getConnectedGamepadMask
     _streamConfig.multiController = streamSettings.multiController;
@@ -664,8 +666,10 @@ static NSMutableSet* hostList;
     int physicalOutputChannels = (int)[AVAudioSession sharedInstance].maximumOutputNumberOfChannels;
     Log(LOG_I, @"Audio device supports %d channels", physicalOutputChannels);
     
-    int numberOfChannels = MIN([streamSettings.audioConfig intValue], physicalOutputChannels);
-    Log(LOG_I, @"Selected number of audio channels %d", numberOfChannels);
+    int requestedChannels = MLNormalizedAudioChannelCount([streamSettings.audioConfig intValue]);
+    int numberOfChannels = MIN(requestedChannels, physicalOutputChannels);
+    Log(LOG_I, @"Selected number of audio channels %d (requested %d, hq=%d)",
+        numberOfChannels, requestedChannels, streamSettings.preferHighQualityAudio ? 1 : 0);
     if (numberOfChannels >= 8) {
         _streamConfig.audioConfiguration = AUDIO_CONFIGURATION_71_SURROUND;
     }

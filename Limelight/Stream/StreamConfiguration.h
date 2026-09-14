@@ -27,6 +27,7 @@
 @property BOOL playAudioOnPC;
 @property BOOL swapABXYButtons;
 @property int audioConfiguration;
+@property int audioQuality;
 @property int supportedVideoFormats;
 @property BOOL multiController;
 @property BOOL useFramePacing;
