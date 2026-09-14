@@ -328,14 +328,17 @@ static const CGFloat kOverlayFontSize = 12;
         return;
     }
     
+    // Timer already runs on the main run loop; skip layout dirt when text is unchanged.
     NSString* overlayText = [self->_streamMan getStatsOverlayTextForLevel:self->_statsOverlayLevel];
-    
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [self updateStatsText:overlayText];
-    });
+    [self updateStatsText:overlayText];
 }
 
 - (void)updateStatsText:(NSString*)text {
+    if ((_statsLabel.text == nil && text == nil) ||
+        (_statsLabel.text != nil && text != nil && [_statsLabel.text isEqualToString:text])) {
+        _statsLabel.hidden = text == nil;
+        return;
+    }
     _statsLabel.text = text;
     _statsLabel.accessibilityValue = text;
     _statsLabel.hidden = text == nil;

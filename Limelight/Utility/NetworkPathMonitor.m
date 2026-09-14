@@ -101,9 +101,21 @@
         }
     }
     
-    self.isWiFi = nw_path_uses_interface_type(path, nw_interface_type_wifi);
-    self.isConstrained = nw_path_is_constrained(path);
-    self.isExpensive = nw_path_is_expensive(path);
+    BOOL isWiFi = nw_path_uses_interface_type(path, nw_interface_type_wifi);
+    BOOL isConstrained = nw_path_is_constrained(path);
+    BOOL isExpensive = nw_path_is_expensive(path);
+    
+    // Path monitors can re-fire identical state; skip observer wakeups on no-ops.
+    if (self.hasPath &&
+        self.isWiFi == isWiFi &&
+        self.isConstrained == isConstrained &&
+        self.isExpensive == isExpensive) {
+        return;
+    }
+    
+    self.isWiFi = isWiFi;
+    self.isConstrained = isConstrained;
+    self.isExpensive = isExpensive;
     self.hasPath = YES;
     
     NSArray *handlers;

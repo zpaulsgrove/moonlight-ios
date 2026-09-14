@@ -71,25 +71,12 @@ static os_log_t AbrPerfLog(void)
     _renderer = renderer;
 }
 
-+ (NSInteger)clampBitrate:(NSInteger)candidate ceiling:(NSInteger)ceiling floor:(NSInteger)floor {
-    return MLClampBitrate(candidate, ceiling, floor);
-}
-
-+ (NSInteger)nextBitrateFromCurrent:(NSInteger)current
-                            ceiling:(NSInteger)ceiling
-                              floor:(NSInteger)floor
-                     dropRatePercent:(float)dropRatePercent
-                        rttVarianceMs:(uint32_t)rttVarianceMs
-                 fecRepairRatePercent:(float)fecRepairRatePercent
-                       queueLatencyMs:(float)queueLatencyMs
-                       connectionPoor:(BOOL)connectionPoor {
-    return MLNextAbrBitrate(current, ceiling, floor, dropRatePercent, rttVarianceMs,
-                            fecRepairRatePercent, queueLatencyMs, connectionPoor);
-}
-
 - (void)noteConnectionStatus:(int)status {
     BOOL poor = (status == CONN_STATUS_POOR);
     dispatch_async(dispatch_get_main_queue(), ^{
+        if (self->_connectionPoor == poor) {
+            return;
+        }
         self->_connectionPoor = poor;
     });
 }
@@ -110,7 +97,7 @@ static os_log_t AbrPerfLog(void)
         BOOL constrained = monitor.isConstrained || monitor.isExpensive;
         dispatch_async(dispatch_get_main_queue(), ^{
             AbrController *strongSelf = weakSelf;
-            if (strongSelf == nil) {
+            if (strongSelf == nil || strongSelf->_pathConstrained == constrained) {
                 return;
             }
             strongSelf->_pathConstrained = constrained;
@@ -232,8 +219,8 @@ static os_log_t AbrPerfLog(void)
     LiGetEstimatedRttInfo(&rtt, &variance);
     
     float fecRepairRatePercent = 0.0f;
-    uint32_t fecRecoveredPackets = 0, fecRecoveredFrames = 0, fecFailedFrames = 0;
-    if (LiGetVideoFecStats(&fecRecoveredPackets, &fecRecoveredFrames, &fecFailedFrames)) {
+    uint32_t fecRecoveredFrames = 0;
+    if (LiGetVideoFecStats(NULL, &fecRecoveredFrames, NULL)) {
         if (_hasFecBaseline) {
             uint32_t deltaRecovered = 0;
             if (fecRecoveredFrames >= _lastFecRecoveredFrames) {

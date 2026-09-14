@@ -11,6 +11,7 @@
 #import "CryptoManager.h"
 #import "TemporaryApp.h"
 #import "ServerInfoResponse.h"
+#import "Utils.h"
 
 #include <libxml2/libxml/xmlreader.h>
 #include <string.h>
@@ -189,7 +190,7 @@
 
 - (NSURLRequest*) newPairRequest:(NSData*)salt clientCert:(NSData*)clientCert {
     NSString* urlString = [NSString stringWithFormat:@"%@/pair?uniqueid=%@&devicename=%@&updateState=1&phrase=getservercert&salt=%@&clientcert=%@",
-                           _baseHTTPURL, _uniqueId, _deviceName, [self bytesToHex:salt], [self bytesToHex:clientCert]];
+                           _baseHTTPURL, _uniqueId, _deviceName, [Utils bytesToHex:salt], [Utils bytesToHex:clientCert]];
     // This call blocks while waiting for the user to input the PIN on the PC
     return [self createRequestFromString:urlString timeout:EXTRA_LONG_TIMEOUT_SEC];
 }
@@ -201,13 +202,13 @@
 
 - (NSURLRequest*) newChallengeRequest:(NSData*)challenge {
     NSString* urlString = [NSString stringWithFormat:@"%@/pair?uniqueid=%@&devicename=%@&updateState=1&clientchallenge=%@",
-                           _baseHTTPURL, _uniqueId, _deviceName, [self bytesToHex:challenge]];
+                           _baseHTTPURL, _uniqueId, _deviceName, [Utils bytesToHex:challenge]];
     return [self createRequestFromString:urlString timeout:NORMAL_TIMEOUT_SEC];
 }
 
 - (NSURLRequest*) newChallengeRespRequest:(NSData*)challengeResp {
     NSString* urlString = [NSString stringWithFormat:@"%@/pair?uniqueid=%@&devicename=%@&updateState=1&serverchallengeresp=%@",
-                           _baseHTTPURL, _uniqueId, _deviceName, [self bytesToHex:challengeResp]];
+                           _baseHTTPURL, _uniqueId, _deviceName, [Utils bytesToHex:challengeResp]];
     return [self createRequestFromString:urlString timeout:NORMAL_TIMEOUT_SEC];
 }
 
@@ -388,15 +389,6 @@
     HttpResponse* resp = [[HttpResponse alloc] init];
     [resp populateWithData:body];
     return [resp isStatusOk];
-}
-
-- (NSString*) bytesToHex:(NSData*)data {
-    const unsigned char* bytes = [data bytes];
-    NSMutableString *hex = [[NSMutableString alloc] init];
-    for (int i = 0; i < [data length]; i++) {
-        [hex appendFormat:@"%02X" , bytes[i]];
-    }
-    return hex;
 }
 
 // Returns an array containing the certificate

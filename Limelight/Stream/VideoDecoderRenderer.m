@@ -98,7 +98,6 @@ static void NotePendingPeak(atomic_int *peak, int pending)
     // recovers a later frame), later P-frames would paint as corruption, so we refuse them
     // and request one recovery for the whole streak rather than one per skipped frame.
     BOOL _arrivalDecodeChainBroken;
-    BOOL _arrivalIdrRequestedForSoftDrop;
     // After a soft-drop IDR recovers, pause backlog/age soft-drop briefly so pending frames
     // do not immediately restart keyframe/RFI storms.
     uint64_t _softDropIdrCooldownoldownUntilMs;
@@ -262,7 +261,6 @@ static void NotePendingPeak(atomic_int *peak, int pending)
 - (void)start
 {
     _arrivalDecodeChainBroken = NO;
-    _arrivalIdrRequestedForSoftDrop = NO;
     _softDropIdrCooldownoldownUntilMs = 0;
     _rfiSoftDropRecoveryPending = NO;
     _rfiSoftDroppedFrameNumber = 0;
@@ -343,12 +341,17 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
         return;
     }
     
-    os_signpost_id_t signpostId = os_signpost_id_generate(VideoRendererSignpostLog());
+    os_log_t signpostLog = VideoRendererSignpostLog();
+    BOOL signposting = os_signpost_enabled(signpostLog);
+    os_signpost_id_t signpostId = OS_SIGNPOST_ID_INVALID;
     
     // Tick quantization: how far past its own tick this callback actually entered
     double tickJitterMs = (CACurrentMediaTime() - sender.timestamp) * 1000.0;
-    os_signpost_interval_begin(VideoRendererSignpostLog(), signpostId, "DisplayLinkCallback",
-                               "tickJitterMs=%.3f", tickJitterMs);
+    if (signposting) {
+        signpostId = os_signpost_id_generate(signpostLog);
+        os_signpost_interval_begin(signpostLog, signpostId, "DisplayLinkCallback",
+                                   "tickJitterMs=%.3f", tickJitterMs);
+    }
     
     [self applyPendingHdrUpdate];
     
@@ -358,7 +361,9 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     // DR_OK without decode (submitFrame Dropped path).
     AVSampleBufferVideoRenderer* renderer = [self currentVideoRenderer:NULL];
     if (renderer == nil || ![renderer isReadyForMoreMediaData]) {
-        os_signpost_interval_end(VideoRendererSignpostLog(), signpostId, "DisplayLinkCallback");
+        if (signposting) {
+            os_signpost_interval_end(signpostLog, signpostId, "DisplayLinkCallback");
+        }
         return;
     }
     
@@ -383,13 +388,17 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
         }
     }
     
-    os_signpost_interval_end(VideoRendererSignpostLog(), signpostId, "DisplayLinkCallback");
+    if (signposting) {
+        os_signpost_interval_end(signpostLog, signpostId, "DisplayLinkCallback");
+    }
 }
 
 // Shared by both submission drivers, so there is exactly one implementation of the state machine.
 - (MLEnqueueResult)submitFrame:(VIDEO_FRAME_HANDLE)handle decodeUnit:(PDECODE_UNIT)du
 {
-    os_signpost_id_t signpostId = os_signpost_id_generate(VideoRendererSignpostLog());
+    os_log_t signpostLog = VideoRendererSignpostLog();
+    BOOL signposting = os_signpost_enabled(signpostLog);
+    os_signpost_id_t signpostId = OS_SIGNPOST_ID_INVALID;
     
     // Recapture the clock here rather than at loop entry so frame age is measured truthfully.
     // DECODE_UNIT timestamps are microseconds; compare against LiGetMicroseconds().
@@ -428,8 +437,11 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     
     DrNoteClientQueueAgeMs(frameAgeMs);
     
-    os_signpost_interval_begin(VideoRendererSignpostLog(), signpostId, "SubmitFrame",
-                               "frameAgeMs=%llu pending=%d", frameAgeMs, pendingFrames);
+    if (signposting) {
+        signpostId = os_signpost_id_generate(signpostLog);
+        os_signpost_interval_begin(signpostLog, signpostId, "SubmitFrame",
+                                   "frameAgeMs=%llu pending=%d", frameAgeMs, pendingFrames);
+    }
     
     MLEnqueueResult result;
     int drStatus;
@@ -438,9 +450,8 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
         result = MLEnqueueResultDropped;
         atomic_fetch_add_explicit(&_softDroppedFrames, 1, memory_order_relaxed);
         
-        if (!_arrivalIdrRequestedForSoftDrop) {
+        if (!_arrivalDecodeChainBroken) {
             _arrivalDecodeChainBroken = YES;
-            _arrivalIdrRequestedForSoftDrop = YES;
             
             // Prefer RFI when negotiated: notify the dropped frame and complete DR_OK.
             // Keep the chain marked broken until an IDR enqueues or a later frame after the
@@ -452,7 +463,7 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
                 _rfiSoftDroppedFrameNumber = du->frameNumber;
                 drStatus = DR_OK;
                 atomic_fetch_add_explicit(&_softDropIdrRequests, 1, memory_order_relaxed);
-                os_log(VideoRendererPerfLog(),
+                os_log_debug(VideoRendererPerfLog(),
                        "event=softdrop_rfi pending=%{public}d ageMs=%{public}llu frame=%{public}d",
                        pendingFrames,
                        (unsigned long long)frameAgeMs,
@@ -461,7 +472,7 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
             else {
                 drStatus = DR_NEED_IDR;
                 atomic_fetch_add_explicit(&_softDropIdrRequests, 1, memory_order_relaxed);
-                os_log(VideoRendererPerfLog(),
+                os_log_debug(VideoRendererPerfLog(),
                        "event=softdrop_idr pending=%{public}d ageMs=%{public}llu cooldownMs=%{public}llu",
                        pendingFrames,
                        (unsigned long long)frameAgeMs,
@@ -491,7 +502,6 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
             BOOL recoveredByRfi = decision.rfiRecoveryCandidate;
             if (recoveredByIdr || recoveredByRfi) {
                 _arrivalDecodeChainBroken = NO;
-                _arrivalIdrRequestedForSoftDrop = NO;
                 _rfiSoftDropRecoveryPending = NO;
                 _rfiSoftDroppedFrameNumber = 0;
             }
@@ -499,14 +509,14 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
                 atomic_fetch_add_explicit(&_idrEnqueued, 1, memory_order_relaxed);
                 if (wasBroken) {
                     _softDropIdrCooldownoldownUntilMs = nowMs + kSoftDropIdrCooldownoldownMs;
-                    os_log(VideoRendererPerfLog(),
+                    os_log_debug(VideoRendererPerfLog(),
                            "event=softdrop_recovered cooldownMs=%{public}llu pending=%{public}d",
                            (unsigned long long)kSoftDropIdrCooldownoldownMs,
                            pendingFrames);
                 }
             }
             else if (recoveredByRfi) {
-                os_log(VideoRendererPerfLog(),
+                os_log_debug(VideoRendererPerfLog(),
                        "event=softdrop_rfi_recovered frame=%{public}d pending=%{public}d",
                        du->frameNumber,
                        pendingFrames);
@@ -521,8 +531,10 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     }
     LiCompleteVideoFrame(handle, drStatus);
     
-    os_signpost_interval_end(VideoRendererSignpostLog(), signpostId, "SubmitFrame",
-                             "result=%ld", (long)result);
+    if (signposting) {
+        os_signpost_interval_end(signpostLog, signpostId, "SubmitFrame",
+                                 "result=%ld", (long)result);
+    }
     return result;
 }
 
@@ -970,12 +982,19 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     
     int sampleLength = picLength;
     if (videoFormat & (VIDEO_FORMAT_MASK_H264 | VIDEO_FORMAT_MASK_H265)) {
-        os_signpost_id_t rewriteId = os_signpost_id_generate(VideoRendererSignpostLog());
-        os_signpost_interval_begin(VideoRendererSignpostLog(), rewriteId, "AnnexBRewrite",
-                                   "bytes=%d", picLength);
+        os_log_t signpostLog = VideoRendererSignpostLog();
+        BOOL signposting = os_signpost_enabled(signpostLog);
+        os_signpost_id_t rewriteId = OS_SIGNPOST_ID_INVALID;
+        if (signposting) {
+            rewriteId = os_signpost_id_generate(signpostLog);
+            os_signpost_interval_begin(signpostLog, rewriteId, "AnnexBRewrite",
+                                       "bytes=%d", picLength);
+        }
         int outLength = 0;
         int rewriteResult = MLRewriteAnnexBToLengthPrefixed(dest, picLength, capacity, &outLength);
-        os_signpost_interval_end(VideoRendererSignpostLog(), rewriteId, "AnnexBRewrite");
+        if (signposting) {
+            os_signpost_interval_end(signpostLog, rewriteId, "AnnexBRewrite");
+        }
         if (rewriteResult != 0) {
             Log(LOG_E, @"Annex-B length-prefix rewrite failed");
             CFRelease(dataBlockBuffer);
@@ -1023,9 +1042,14 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
 
     // Re-check and enqueue under the same lock so a concurrent createDisplayLayer cannot leave
     // this sample on a discarded renderer while we still report Enqueued.
-    os_signpost_id_t enqueueId = os_signpost_id_generate(VideoRendererSignpostLog());
-    os_signpost_interval_begin(VideoRendererSignpostLog(), enqueueId, "Enqueue",
-                               "bytes=%d", sampleLength);
+    os_log_t signpostLog = VideoRendererSignpostLog();
+    BOOL signposting = os_signpost_enabled(signpostLog);
+    os_signpost_id_t enqueueId = OS_SIGNPOST_ID_INVALID;
+    if (signposting) {
+        enqueueId = os_signpost_id_generate(signpostLog);
+        os_signpost_interval_begin(signpostLog, enqueueId, "Enqueue",
+                                   "bytes=%d", sampleLength);
+    }
     
     AVSampleBufferDisplayLayer* layerToReveal = nil;
     BOOL shouldReveal = NO;
@@ -1036,7 +1060,9 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
                        [videoRenderer isReadyForMoreMediaData]);
     if (!canEnqueue) {
         os_unfair_lock_unlock(&_layerLock);
-        os_signpost_interval_end(VideoRendererSignpostLog(), enqueueId, "Enqueue");
+        if (signposting) {
+            os_signpost_interval_end(signpostLog, enqueueId, "Enqueue");
+        }
         CFRelease(dataBlockBuffer);
         CFRelease(frameBlockBuffer);
         CFRelease(sampleBuffer);
@@ -1053,7 +1079,9 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     }
     os_unfair_lock_unlock(&_layerLock);
     
-    os_signpost_interval_end(VideoRendererSignpostLog(), enqueueId, "Enqueue");
+    if (signposting) {
+        os_signpost_interval_end(signpostLog, enqueueId, "Enqueue");
+    }
     
     if (shouldReveal) {
         uint64_t revealGeneration = generation;

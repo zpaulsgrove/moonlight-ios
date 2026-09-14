@@ -26,10 +26,10 @@ static CFTimeInterval s_wifiCacheAt = 0;
 static const CFTimeInterval kWiFiCacheTTLSeconds = 5.0;
 
 + (NSData*) randomBytes:(NSInteger)length {
-    char* bytes = malloc(length);
-    arc4random_buf(bytes, length);
-    NSData* randomData = [NSData dataWithBytes:bytes length:length];
-    free(bytes);
+    NSMutableData* randomData = [NSMutableData dataWithLength:length];
+    if (randomData.length > 0) {
+        arc4random_buf(randomData.mutableBytes, randomData.length);
+    }
     return randomData;
 }
 

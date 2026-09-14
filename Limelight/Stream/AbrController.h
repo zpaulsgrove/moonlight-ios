@@ -33,19 +33,6 @@ NS_ASSUME_NONNULL_BEGIN
 // Last applied (or shadow) target bitrate in kbps.
 - (NSInteger)currentBitrateKbps;
 
-// Pure helper for tests: clamp a candidate bitrate into [floor, ceiling].
-+ (NSInteger)clampBitrate:(NSInteger)candidate ceiling:(NSInteger)ceiling floor:(NSInteger)floor;
-
-// Pure helper for tests: next bitrate from drop / RTT / FEC / queue / poor.
-+ (NSInteger)nextBitrateFromCurrent:(NSInteger)current
-                            ceiling:(NSInteger)ceiling
-                              floor:(NSInteger)floor
-                     dropRatePercent:(float)dropRatePercent
-                        rttVarianceMs:(uint32_t)rttVarianceMs
-                 fecRepairRatePercent:(float)fecRepairRatePercent
-                       queueLatencyMs:(float)queueLatencyMs
-                       connectionPoor:(BOOL)connectionPoor;
-
 @end
 
 NS_ASSUME_NONNULL_END
