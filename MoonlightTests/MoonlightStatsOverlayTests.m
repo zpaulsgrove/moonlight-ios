@@ -130,4 +130,23 @@ static MLStatsOverlaySample HdrSample(void) {
     XCTAssertEqualObjects(MLStatsShortCodecName(0, NO), @"Unknown");
 }
 
+- (void)testStatsOverlayTextUnchanged {
+    // Both nil and already hidden: skip.
+    XCTAssertTrue(MLStatsOverlayTextUnchanged(nil, nil, YES, nil));
+    // Both nil but label still visible: must update.
+    XCTAssertFalse(MLStatsOverlayTextUnchanged(nil, nil, NO, nil));
+    
+    // Equal text with matching accessibility and visible: skip.
+    XCTAssertTrue(MLStatsOverlayTextUnchanged(@"a", @"a", NO, @"a"));
+    // Equal text but accessibility drifted: must update.
+    XCTAssertFalse(MLStatsOverlayTextUnchanged(@"a", @"a", NO, @"b"));
+    // Equal text but hidden drifted: must update.
+    XCTAssertFalse(MLStatsOverlayTextUnchanged(@"a", @"a", YES, @"a"));
+    
+    // Text changes always update.
+    XCTAssertFalse(MLStatsOverlayTextUnchanged(@"a", @"b", NO, @"a"));
+    XCTAssertFalse(MLStatsOverlayTextUnchanged(nil, @"a", YES, nil));
+    XCTAssertFalse(MLStatsOverlayTextUnchanged(@"a", nil, NO, @"a"));
+}
+
 @end

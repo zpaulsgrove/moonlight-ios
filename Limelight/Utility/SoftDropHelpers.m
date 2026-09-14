@@ -53,6 +53,14 @@ MLSoftDropDecision MLSoftDropEvaluate(BOOL isIdr,
     return d;
 }
 
+BOOL MLSoftDropShouldStartRecovery(BOOL decodeChainBroken) {
+    return !decodeChainBroken;
+}
+
+BOOL MLSoftDropShouldClearBrokenChain(BOOL isIdr, BOOL rfiRecoveryCandidate) {
+    return isIdr || rfiRecoveryCandidate;
+}
+
 BOOL MLPacedShouldKeepDraining(int enqueuedThisTick, int remainingQueued, int maxEnqueuesPerTick) {
     if (enqueuedThisTick < 1) {
         return YES;

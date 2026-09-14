@@ -450,7 +450,7 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
         result = MLEnqueueResultDropped;
         atomic_fetch_add_explicit(&_softDroppedFrames, 1, memory_order_relaxed);
         
-        if (!_arrivalDecodeChainBroken) {
+        if (MLSoftDropShouldStartRecovery(_arrivalDecodeChainBroken)) {
             _arrivalDecodeChainBroken = YES;
             
             // Prefer RFI when negotiated: notify the dropped frame and complete DR_OK.
@@ -500,7 +500,7 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
             BOOL wasBroken = _arrivalDecodeChainBroken;
             BOOL recoveredByIdr = isIdr;
             BOOL recoveredByRfi = decision.rfiRecoveryCandidate;
-            if (recoveredByIdr || recoveredByRfi) {
+            if (MLSoftDropShouldClearBrokenChain(recoveredByIdr, recoveredByRfi)) {
                 _arrivalDecodeChainBroken = NO;
                 _rfiSoftDropRecoveryPending = NO;
                 _rfiSoftDroppedFrameNumber = 0;

@@ -12,6 +12,7 @@
 #import "StreamManager.h"
 #import "ControllerSupport.h"
 #import "DataManager.h"
+#import "StatsOverlayFormatting.h"
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -334,9 +335,10 @@ static const CGFloat kOverlayFontSize = 12;
 }
 
 - (void)updateStatsText:(NSString*)text {
-    if ((_statsLabel.text == nil && text == nil) ||
-        (_statsLabel.text != nil && text != nil && [_statsLabel.text isEqualToString:text])) {
-        _statsLabel.hidden = text == nil;
+    if (MLStatsOverlayTextUnchanged(_statsLabel.text,
+                                    text,
+                                    _statsLabel.hidden,
+                                    _statsLabel.accessibilityValue)) {
         return;
     }
     _statsLabel.text = text;

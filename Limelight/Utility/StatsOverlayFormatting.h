@@ -44,4 +44,11 @@ FOUNDATION_EXPORT float MLStatsFramesPerSecond(int totalFrames, float intervalSe
 // 1080p HEVC HDR · 59.9 fps · drop 0.08% · net 8 ms ±2 · host 3.1 ms · queue 0.2 ms
 FOUNDATION_EXPORT NSString* MLStatsOverlayLiteLine(MLStatsOverlaySample sample);
 
+// YES when the overlay label can skip a full text/accessibility write.
+// Requires text equality (including both nil) and matching hidden/accessibility state.
+FOUNDATION_EXPORT BOOL MLStatsOverlayTextUnchanged(NSString* _Nullable currentText,
+                                                   NSString* _Nullable nextText,
+                                                   BOOL currentlyHidden,
+                                                   NSString* _Nullable currentAccessibilityValue);
+
 NS_ASSUME_NONNULL_END

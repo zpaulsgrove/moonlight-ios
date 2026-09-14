@@ -7,6 +7,19 @@
 
 #import <Network/Network.h>
 
+BOOL MLNetworkPathShouldSkipNotify(BOOL hasPath,
+                                   BOOL currentWiFi,
+                                   BOOL currentConstrained,
+                                   BOOL currentExpensive,
+                                   BOOL nextWiFi,
+                                   BOOL nextConstrained,
+                                   BOOL nextExpensive) {
+    return hasPath &&
+           currentWiFi == nextWiFi &&
+           currentConstrained == nextConstrained &&
+           currentExpensive == nextExpensive;
+}
+
 @interface NetworkPathMonitor ()
 @property (atomic, readwrite) BOOL isWiFi;
 @property (atomic, readwrite) BOOL isConstrained;
@@ -106,10 +119,13 @@
     BOOL isExpensive = nw_path_is_expensive(path);
     
     // Path monitors can re-fire identical state; skip observer wakeups on no-ops.
-    if (self.hasPath &&
-        self.isWiFi == isWiFi &&
-        self.isConstrained == isConstrained &&
-        self.isExpensive == isExpensive) {
+    if (MLNetworkPathShouldSkipNotify(self.hasPath,
+                                       self.isWiFi,
+                                       self.isConstrained,
+                                       self.isExpensive,
+                                       isWiFi,
+                                       isConstrained,
+                                       isExpensive)) {
         return;
     }
     
@@ -134,8 +150,16 @@
     if (observer == nil || handler == nil) {
         return;
     }
+    void (^copied)(NetworkPathMonitor *) = [handler copy];
+    BOOL deliverSnapshot = NO;
     @synchronized (self) {
-        [_observers setObject:[handler copy] forKey:observer];
+        [_observers setObject:copied forKey:observer];
+        deliverSnapshot = self.hasPath;
+    }
+    // Late subscribers must see the current path; otherwise an identical re-fire
+    // after registration would be skipped by MLNetworkPathShouldSkipNotify.
+    if (deliverSnapshot) {
+        copied(self);
     }
 }
 

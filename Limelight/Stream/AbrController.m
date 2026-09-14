@@ -89,10 +89,9 @@ static os_log_t AbrPerfLog(void)
     
     NSInteger gen = _generation;
     NetworkPathMonitor *pathMonitor = [NetworkPathMonitor sharedMonitor];
-    _pathConstrained = pathMonitor.hasPath && (pathMonitor.isConstrained || pathMonitor.isExpensive);
-    _pathHoldActive = _pathConstrained;
-    _pathHoldUntil = _pathConstrained ? CACurrentMediaTime() + MLAbrPathHintHoldDuration : 0;
     __weak AbrController *weakSelf = self;
+    // Register before sampling so a current hasPath snapshot is delivered immediately
+    // and cannot be stranded by later identical path re-fires that skip notify.
     [pathMonitor addObserver:self handler:^(NetworkPathMonitor *monitor) {
         BOOL constrained = monitor.isConstrained || monitor.isExpensive;
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -103,6 +102,9 @@ static os_log_t AbrPerfLog(void)
             strongSelf->_pathConstrained = constrained;
         });
     }];
+    _pathConstrained = pathMonitor.hasPath && (pathMonitor.isConstrained || pathMonitor.isExpensive);
+    _pathHoldActive = _pathConstrained;
+    _pathHoldUntil = _pathConstrained ? CACurrentMediaTime() + MLAbrPathHintHoldDuration : 0;
     
     // Local adaptation always runs (host apply is optional).
     dispatch_async(dispatch_get_main_queue(), ^{

@@ -82,3 +82,22 @@ NSString* MLStatsOverlayLiteLine(MLStatsOverlaySample sample) {
     
     return [components componentsJoinedByString:kStatsOverlaySeparator];
 }
+
+BOOL MLStatsOverlayTextUnchanged(NSString* currentText,
+                                 NSString* nextText,
+                                 BOOL currentlyHidden,
+                                 NSString* currentAccessibilityValue) {
+    BOOL textEqual = (currentText == nil && nextText == nil) ||
+                     (currentText != nil && nextText != nil && [currentText isEqualToString:nextText]);
+    if (!textEqual) {
+        return NO;
+    }
+    BOOL expectedHidden = (nextText == nil);
+    if (currentlyHidden != expectedHidden) {
+        return NO;
+    }
+    if (nextText == nil) {
+        return YES;
+    }
+    return currentAccessibilityValue != nil && [currentAccessibilityValue isEqualToString:nextText];
+}

@@ -51,6 +51,15 @@ FOUNDATION_EXPORT MLSoftDropDecision MLSoftDropEvaluate(BOOL isIdr,
                                                         uint64_t frameAgeMs,
                                                         uint64_t maxAgeMs);
 
+// One recovery request (IDR or RFI notify) per soft-drop streak. The chain-broken
+// latch is both the refuse-P-frames signal and the already-requested sentinel.
+FOUNDATION_EXPORT BOOL MLSoftDropShouldStartRecovery(BOOL decodeChainBroken);
+
+// After a successful enqueue, clear the broken latch when an IDR arrives or an
+// RFI recovery candidate (later than the last soft-dropped frame) enqueues.
+FOUNDATION_EXPORT BOOL MLSoftDropShouldClearBrokenChain(BOOL isIdr,
+                                                        BOOL rfiRecoveryCandidate);
+
 // After a successful paced enqueue, keep polling if more frames remain and this
 // vsync is still under the flood cap. Drain toward the live edge (remaining 0)
 // rather than holding a multi-frame backlog across ticks.

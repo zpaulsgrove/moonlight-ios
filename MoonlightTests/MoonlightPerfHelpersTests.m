@@ -13,6 +13,7 @@
 #import "SoftDropHelpers.h"
 #import "Av1FormatDescCache.h"
 #import "AudioPlaybackHelpers.h"
+#import "NetworkPathMonitor.h"
 
 #include <Limelight.h>
 #import <CoreMedia/CoreMedia.h>
@@ -377,6 +378,32 @@
     XCTAssertFalse(notYet.rfiRecoveryCandidate);
     XCTAssertTrue(notYet.dropBrokenChain);
     XCTAssertTrue(notYet.drop);
+}
+
+- (void)testSoftDropRecoveryLatchOneShotPerStreak {
+    // First soft-drop of a streak starts recovery; subsequent drops in the streak do not.
+    XCTAssertTrue(MLSoftDropShouldStartRecovery(NO));
+    XCTAssertFalse(MLSoftDropShouldStartRecovery(YES));
+    
+    // IDR or RFI recovery candidate clears the broken latch.
+    XCTAssertTrue(MLSoftDropShouldClearBrokenChain(YES, NO));
+    XCTAssertTrue(MLSoftDropShouldClearBrokenChain(NO, YES));
+    XCTAssertFalse(MLSoftDropShouldClearBrokenChain(NO, NO));
+}
+
+- (void)testNetworkPathShouldSkipNotify {
+    // First update (hasPath=NO) never skips.
+    XCTAssertFalse(MLNetworkPathShouldSkipNotify(NO, YES, NO, NO, YES, YES, NO));
+    
+    // Identical republish skips.
+    XCTAssertTrue(MLNetworkPathShouldSkipNotify(YES, YES, NO, NO, YES, NO, NO));
+    
+    // Constrained transition must notify.
+    XCTAssertFalse(MLNetworkPathShouldSkipNotify(YES, YES, NO, NO, YES, YES, NO));
+    
+    // Expensive / Wi-Fi flips must notify.
+    XCTAssertFalse(MLNetworkPathShouldSkipNotify(YES, YES, NO, NO, NO, NO, NO));
+    XCTAssertFalse(MLNetworkPathShouldSkipNotify(YES, YES, NO, NO, YES, NO, YES));
 }
 
 - (void)testPacedShouldKeepDrainingCatchUpAndCap {
