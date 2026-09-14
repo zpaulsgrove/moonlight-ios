@@ -354,30 +354,31 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit);
     
     // Decode in order (no soft-drop on the paced path). Catch up by enqueueing extra
     // frames this vsync, capped so a refresh dip cannot dump the whole FIFO into ASBDL.
+    // Leave frames queued when ASBDL is already full so P-frames are not completed as
+    // DR_OK without decode (submitFrame Dropped path).
+    AVSampleBufferVideoRenderer* renderer = [self currentVideoRenderer:NULL];
+    if (renderer == nil || ![renderer isReadyForMoreMediaData]) {
+        os_signpost_interval_end(VideoRendererSignpostLog(), signpostId, "DisplayLinkCallback");
+        return;
+    }
+    
     VIDEO_FRAME_HANDLE handle;
     PDECODE_UNIT du;
     int enqueuedThisTick = 0;
     while (LiPollNextVideoFrame(&handle, &du)) {
         MLEnqueueResult result = [self submitFrame:handle decodeUnit:du];
-        
-        if (result == MLEnqueueResultEnqueued) {
-            enqueuedThisTick++;
-            if (!MLPacedShouldKeepDraining(enqueuedThisTick,
-                                           LiGetPendingVideoFrames(),
-                                           kMLPacedMaxEnqueuesPerTick)) {
-                break;
-            }
-            // Polling the next extra only when ASBDL can take it avoids completing a
-            // P-frame as DR_OK without decode (submitFrame Dropped path).
-            AVSampleBufferVideoRenderer* renderer = [self currentVideoRenderer:NULL];
-            if (renderer == nil || ![renderer isReadyForMoreMediaData]) {
-                break;
-            }
-            continue;
+        if (result != MLEnqueueResultEnqueued) {
+            // Saturation or NeedsIdr: stop so later P-frames stay queued for the next tick.
+            break;
         }
         
-        // ASBDL not ready after a burst: stop so later P-frames are not completed as DR_OK.
-        if (enqueuedThisTick > 0) {
+        enqueuedThisTick++;
+        renderer = [self currentVideoRenderer:NULL];
+        BOOL rendererReady = (renderer != nil && [renderer isReadyForMoreMediaData]);
+        if (!MLPacedShouldPollNextFrame(enqueuedThisTick,
+                                        LiGetPendingVideoFrames(),
+                                        kMLPacedMaxEnqueuesPerTick,
+                                        rendererReady)) {
             break;
         }
     }

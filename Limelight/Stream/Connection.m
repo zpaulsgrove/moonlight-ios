@@ -197,6 +197,28 @@ MLEnqueueResult DrSubmitDecodeUnit(PDECODE_UNIT decodeUnit)
                              decodeUnit:decodeUnit];
 }
 
+static BOOL MLSetPreferredIOBufferDuration(AVAudioSession *session, NSTimeInterval preferredIOBufferDuration)
+{
+    NSError *error = nil;
+    if ([session setPreferredIOBufferDuration:preferredIOBufferDuration error:&error]) {
+        return YES;
+    }
+    Log(LOG_W, @"AVAudioSession preferredIOBufferDuration %.4fs failed: %@",
+        preferredIOBufferDuration, error.localizedDescription);
+    
+    // Frame-sized requests can be rejected on some devices; fall back to 5 ms once.
+    const NSTimeInterval kFallbackIO = 0.005;
+    if (preferredIOBufferDuration > kFallbackIO + 0.0001) {
+        error = nil;
+        if ([session setPreferredIOBufferDuration:kFallbackIO error:&error]) {
+            Log(LOG_W, @"AVAudioSession fell back to 5 ms IO period");
+            return YES;
+        }
+        Log(LOG_W, @"AVAudioSession 5 ms IO fallback failed: %@", error.localizedDescription);
+    }
+    return NO;
+}
+
 static void MLApplyLowLatencyAudioSession(NSTimeInterval preferredIOBufferDuration)
 {
     AVAudioSession *session = [AVAudioSession sharedInstance];
@@ -209,10 +231,7 @@ static void MLApplyLowLatencyAudioSession(NSTimeInterval preferredIOBufferDurati
                         error:&error]) {
         Log(LOG_W, @"AVAudioSession category/mode failed: %@", error.localizedDescription);
     }
-    error = nil;
-    if (![session setPreferredIOBufferDuration:preferredIOBufferDuration error:&error]) {
-        Log(LOG_W, @"AVAudioSession preferredIOBufferDuration failed: %@", error.localizedDescription);
-    }
+    (void)MLSetPreferredIOBufferDuration(session, preferredIOBufferDuration);
 }
 
 int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, void* context, int flags)
@@ -268,7 +287,7 @@ int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, v
     // Start playback
     SDL_PauseAudioDevice(audioDevice, 0);
     
-    // SDL may reset category/options on open; re-apply without changing the already-opened IO size.
+    // SDL may reset category/options on open; re-apply MixWithOthers and the IO period.
     AVAudioSession *session = [AVAudioSession sharedInstance];
     NSError *error = nil;
     [session setCategory:AVAudioSessionCategoryPlayback
@@ -278,12 +297,18 @@ int ArInit(int audioConfiguration, POPUS_MULTISTREAM_CONFIGURATION opusConfig, v
     if (error != nil) {
         Log(LOG_W, @"AVAudioSession re-apply after SDL open failed: %@", error.localizedDescription);
     }
+    (void)MLSetPreferredIOBufferDuration(session, preferredIO);
     
+    NSTimeInterval actualIO = session.IOBufferDuration;
     Log(LOG_I, @"Audio device want.samples=%d have.samples=%d preferredIO=%.4fs actualIO=%.4fs",
         want.samples,
         have.samples,
         preferredIO,
-        session.IOBufferDuration);
+        actualIO);
+    if (actualIO > preferredIO + 0.002) {
+        Log(LOG_E, @"AVAudioSession IOBufferDuration still high (%.4fs vs preferred %.4fs)",
+            actualIO, preferredIO);
+    }
     
     return 0;
 }
@@ -323,7 +348,17 @@ void ArDecodeAndPlaySample(char* sampleData, int sampleLength)
                                         (short*)audioBuffer, audioConfig.samplesPerFrame, 0);
     if (decodeLen < 0) {
         Log(LOG_W, @"Opus decode failed: %d plc=%d", decodeLen, isPlc ? 1 : 0);
-        return;
+        // Corrupt real packet: attempt one PLC frame so the speaker does not go silent.
+        if (isPlc) {
+            return;
+        }
+        decodeLen = opus_multistream_decode(opusDecoder, NULL, 0,
+                                            (short*)audioBuffer, audioConfig.samplesPerFrame, 0);
+        if (decodeLen < 0) {
+            Log(LOG_W, @"Opus PLC after decode failure also failed: %d", decodeLen);
+            return;
+        }
+        isPlc = YES;
     }
     if (decodeLen == 0) {
         return;

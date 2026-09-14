@@ -398,6 +398,18 @@
     XCTAssertFalse(MLPacedShouldKeepDraining(4, 1, 0));
 }
 
+- (void)testPacedShouldPollNextFrameRequiresRendererReady {
+    // Cap and remaining would allow another poll, but ASBDL not ready must stop.
+    XCTAssertFalse(MLPacedShouldPollNextFrame(1, 5, kMLPacedMaxEnqueuesPerTick, NO));
+    XCTAssertTrue(MLPacedShouldPollNextFrame(1, 5, kMLPacedMaxEnqueuesPerTick, YES));
+    
+    // Live edge still stops even when ready.
+    XCTAssertFalse(MLPacedShouldPollNextFrame(1, 0, kMLPacedMaxEnqueuesPerTick, YES));
+    
+    // Hit the per-tick cap.
+    XCTAssertFalse(MLPacedShouldPollNextFrame(kMLPacedMaxEnqueuesPerTick, 8, kMLPacedMaxEnqueuesPerTick, YES));
+}
+
 - (void)testAudioPreferredIOBufferDuration {
     XCTAssertEqualWithAccuracy(MLPreferredAudioIOBufferDuration(48000, 240), 0.005, 0.0001);
     XCTAssertEqualWithAccuracy(MLPreferredAudioIOBufferDuration(48000, 480), 0.010, 0.0001);
@@ -416,6 +428,9 @@
     XCTAssertEqual(MLSdlQueuedAudioDurationMs(4 * 1920, 1920, 5), 20);
     XCTAssertEqual(MLSdlQueuedAudioDurationMs(0, 1920, 5), 0);
     XCTAssertEqual(MLSdlQueuedAudioDurationMs(100, 0, 5), 0);
+    // Partial frames truncate; one full frame plus half still counts as 5 ms.
+    XCTAssertEqual(MLSdlQueuedAudioDurationMs(1920, 1920, 5), 5);
+    XCTAssertEqual(MLSdlQueuedAudioDurationMs(1920 + 960, 1920, 5), 5);
     
     XCTAssertEqual(MLCombinedAudioPendingMs(15, 10), 25);
     XCTAssertEqual(MLCombinedAudioPendingMs(-3, 10), 10);
@@ -428,6 +443,11 @@
     XCTAssertFalse(MLShouldQueueDecodedAudio(NO, 21, kMLAudioPendingCapMs));
     XCTAssertFalse(MLShouldQueueDecodedAudio(NO, 25, kMLAudioPendingCapMs));
     XCTAssertTrue(MLShouldQueueDecodedAudio(NO, 0, kMLAudioPendingCapMs));
+    
+    // Invalid cap falls back to kMLAudioPendingCapMs (20).
+    XCTAssertTrue(MLShouldQueueDecodedAudio(NO, 20, 0));
+    XCTAssertFalse(MLShouldQueueDecodedAudio(NO, 21, 0));
+    XCTAssertFalse(MLShouldQueueDecodedAudio(NO, 21, -1));
 }
 
 - (void)testAv1FormatDescCacheHitMissAndInvalidate {

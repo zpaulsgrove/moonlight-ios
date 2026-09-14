@@ -58,4 +58,11 @@ FOUNDATION_EXPORT BOOL MLPacedShouldKeepDraining(int enqueuedThisTick,
                                                  int remainingQueued,
                                                  int maxEnqueuesPerTick);
 
+// Combine drain policy with ASBDL readiness. Never poll the next frame when the
+// renderer cannot take it (that would complete a P-frame as DR_OK without decode).
+FOUNDATION_EXPORT BOOL MLPacedShouldPollNextFrame(int enqueuedThisTick,
+                                                  int remainingQueued,
+                                                  int maxEnqueuesPerTick,
+                                                  BOOL rendererReady);
+
 NS_ASSUME_NONNULL_END

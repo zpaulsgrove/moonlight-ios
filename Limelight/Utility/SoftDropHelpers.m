@@ -63,3 +63,13 @@ BOOL MLPacedShouldKeepDraining(int enqueuedThisTick, int remainingQueued, int ma
     int cap = maxEnqueuesPerTick > 0 ? maxEnqueuesPerTick : kMLPacedMaxEnqueuesPerTick;
     return enqueuedThisTick < cap;
 }
+
+BOOL MLPacedShouldPollNextFrame(int enqueuedThisTick,
+                                int remainingQueued,
+                                int maxEnqueuesPerTick,
+                                BOOL rendererReady) {
+    if (!rendererReady) {
+        return NO;
+    }
+    return MLPacedShouldKeepDraining(enqueuedThisTick, remainingQueued, maxEnqueuesPerTick);
+}
