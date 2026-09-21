@@ -7,40 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		A1B2C3D4E5F60718293A4B13 /* AbrBitrateHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B11 /* AbrBitrateHelpers.m */; };
-		A1B2C3D4E5F60718293A4B14 /* AbrBitrateHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B11 /* AbrBitrateHelpers.m */; };
-		A1B2C3D4E5F60718293A4B15 /* AbrBitrateHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B11 /* AbrBitrateHelpers.m */; };
-		A1B2C3D4E5F60718293A4B24 /* SoftDropHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B22 /* SoftDropHelpers.m */; };
-		A1B2C3D4E5F60718293A4B25 /* SoftDropHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B22 /* SoftDropHelpers.m */; };
-		A1B2C3D4E5F60718293A4B26 /* SoftDropHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B22 /* SoftDropHelpers.m */; };
-		A1B2C3D4E5F60718293A4B52 /* AudioPlaybackHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B50 /* AudioPlaybackHelpers.m */; };
-		A1B2C3D4E5F60718293A4B53 /* AudioPlaybackHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B50 /* AudioPlaybackHelpers.m */; };
-		A1B2C3D4E5F60718293A4B54 /* AudioPlaybackHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B50 /* AudioPlaybackHelpers.m */; };
-		A1B2C3D4E5F60718293A4B30 /* Av1FormatDescCache.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B2E /* Av1FormatDescCache.m */; };
-		A1B2C3D4E5F60718293A4B31 /* Av1FormatDescCache.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B2E /* Av1FormatDescCache.m */; };
-		A1B2C3D4E5F60718293A4B32 /* Av1FormatDescCache.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B2E /* Av1FormatDescCache.m */; };
-		A1B2C3D4E5F60718293A4B1F /* NetworkPathMonitor.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B1D /* NetworkPathMonitor.m */; };
-		A1B2C3D4E5F60718293A4B20 /* NetworkPathMonitor.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B1D /* NetworkPathMonitor.m */; };
-		A1B2C3D4E5F60718293A4B21 /* NetworkPathMonitor.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B1D /* NetworkPathMonitor.m */; };
-		A1B2C3D4E5F60718293A4B16 /* AnnexBHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B05 /* AnnexBHelpers.m */; };
-		B7C1D2E3F4A5061728394504 /* StatsOverlayFormatting.m in Sources */ = {isa = PBXBuildFile; fileRef = B7C1D2E3F4A5061728394503 /* StatsOverlayFormatting.m */; };
-		B7C1D2E3F4A5061728394505 /* StatsOverlayFormatting.m in Sources */ = {isa = PBXBuildFile; fileRef = B7C1D2E3F4A5061728394503 /* StatsOverlayFormatting.m */; };
-		B7C1D2E3F4A5061728394506 /* StatsOverlayFormatting.m in Sources */ = {isa = PBXBuildFile; fileRef = B7C1D2E3F4A5061728394503 /* StatsOverlayFormatting.m */; };
-		B7C1D2E3F4A5061728394508 /* MoonlightStatsOverlayTests.m in Sources */ = {isa = PBXBuildFile; fileRef = B7C1D2E3F4A5061728394507 /* MoonlightStatsOverlayTests.m */; };
-		B7C1D2E3F4A5061728394509 /* HdrMetadataHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B19 /* HdrMetadataHelpers.m */; };
-		B7C1D2E3F4A506172839450B /* MoonlightHdrMetadataTests.m in Sources */ = {isa = PBXBuildFile; fileRef = B7C1D2E3F4A506172839450A /* MoonlightHdrMetadataTests.m */; };
-		A1B2C3D4E5F60718293A4B17 /* Utils.m in Sources */ = {isa = PBXBuildFile; fileRef = FB89462219F646E200339C8A /* Utils.m */; };
-		A1B2C3D4E5F60718293A4B18 /* Logger.m in Sources */ = {isa = PBXBuildFile; fileRef = FBD1C8E11A8AD71400C6703C /* Logger.m */; };
-		A1B2C3D4E5F60718293A4B1B /* HdrMetadataHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B19 /* HdrMetadataHelpers.m */; };
-		A1B2C3D4E5F60718293A4B1C /* HdrMetadataHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B19 /* HdrMetadataHelpers.m */; };
-
-		A1B2C3D4E5F60718293A4B03 /* AbrController.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B01 /* AbrController.m */; };
-		A1B2C3D4E5F60718293A4B04 /* AbrController.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B01 /* AbrController.m */; };
-		A1B2C3D4E5F60718293A4B07 /* AnnexBHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B05 /* AnnexBHelpers.m */; };
-		A1B2C3D4E5F60718293A4B08 /* AnnexBHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B05 /* AnnexBHelpers.m */; };
-		8CE916B7B43F4C1C87CDB6EC /* MoonlightPerfHelpersTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 2639EAF244624C7E9F140C0C /* MoonlightPerfHelpersTests.m */; };
-		B0C1D2E3F405162738495A02 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B0C1D2E3F405162738495A01 /* XCTest.framework */; };
 		693B3A9B218638CD00982F7B /* Settings.bundle in Resources */ = {isa = PBXBuildFile; fileRef = 693B3A9A218638CD00982F7B /* Settings.bundle */; };
+		8CE916B7B43F4C1C87CDB6EC /* MoonlightPerfHelpersTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 2639EAF244624C7E9F140C0C /* MoonlightPerfHelpersTests.m */; };
 		98181BE92791277400E43572 /* libSDL2.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 98181BE82791275D00E43572 /* libSDL2.a */; };
 		98181BEB2791278F00E43572 /* libSDL2.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 98181BEA2791278300E43572 /* libSDL2.a */; };
 		98181BED2791281100E43572 /* CoreMotion.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 98181BEC2791281100E43572 /* CoreMotion.framework */; };
@@ -74,6 +42,36 @@
 		98CFB82F1CAD481B0048EF74 /* libmoonlight-common.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 98AB2E841CAD46840089BB98 /* libmoonlight-common.a */; };
 		98D5856D1C0EA79600F6CC00 /* TemporaryHost.m in Sources */ = {isa = PBXBuildFile; fileRef = 98D5856C1C0EA79600F6CC00 /* TemporaryHost.m */; };
 		98D585701C0ED0E800F6CC00 /* TemporarySettings.m in Sources */ = {isa = PBXBuildFile; fileRef = 98D5856F1C0ED0E800F6CC00 /* TemporarySettings.m */; };
+		A1B2C3D4E5F60718293A4B03 /* AbrController.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B01 /* AbrController.m */; };
+		A1B2C3D4E5F60718293A4B04 /* AbrController.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B01 /* AbrController.m */; };
+		A1B2C3D4E5F60718293A4B07 /* AnnexBHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B05 /* AnnexBHelpers.m */; };
+		A1B2C3D4E5F60718293A4B08 /* AnnexBHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B05 /* AnnexBHelpers.m */; };
+		A1B2C3D4E5F60718293A4B13 /* AbrBitrateHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B11 /* AbrBitrateHelpers.m */; };
+		A1B2C3D4E5F60718293A4B14 /* AbrBitrateHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B11 /* AbrBitrateHelpers.m */; };
+		A1B2C3D4E5F60718293A4B15 /* AbrBitrateHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B11 /* AbrBitrateHelpers.m */; };
+		A1B2C3D4E5F60718293A4B16 /* AnnexBHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B05 /* AnnexBHelpers.m */; };
+		A1B2C3D4E5F60718293A4B17 /* Utils.m in Sources */ = {isa = PBXBuildFile; fileRef = FB89462219F646E200339C8A /* Utils.m */; };
+		A1B2C3D4E5F60718293A4B18 /* Logger.m in Sources */ = {isa = PBXBuildFile; fileRef = FBD1C8E11A8AD71400C6703C /* Logger.m */; };
+		A1B2C3D4E5F60718293A4B1B /* HdrMetadataHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B19 /* HdrMetadataHelpers.m */; };
+		A1B2C3D4E5F60718293A4B1C /* HdrMetadataHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B19 /* HdrMetadataHelpers.m */; };
+		A1B2C3D4E5F60718293A4B1F /* NetworkPathMonitor.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B1D /* NetworkPathMonitor.m */; };
+		A1B2C3D4E5F60718293A4B20 /* NetworkPathMonitor.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B1D /* NetworkPathMonitor.m */; };
+		A1B2C3D4E5F60718293A4B21 /* NetworkPathMonitor.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B1D /* NetworkPathMonitor.m */; };
+		A1B2C3D4E5F60718293A4B24 /* SoftDropHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B22 /* SoftDropHelpers.m */; };
+		A1B2C3D4E5F60718293A4B25 /* SoftDropHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B22 /* SoftDropHelpers.m */; };
+		A1B2C3D4E5F60718293A4B26 /* SoftDropHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B22 /* SoftDropHelpers.m */; };
+		A1B2C3D4E5F60718293A4B30 /* Av1FormatDescCache.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B2E /* Av1FormatDescCache.m */; };
+		A1B2C3D4E5F60718293A4B31 /* Av1FormatDescCache.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B2E /* Av1FormatDescCache.m */; };
+		A1B2C3D4E5F60718293A4B32 /* Av1FormatDescCache.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B2E /* Av1FormatDescCache.m */; };
+		A1B2C3D4E5F60718293A4B52 /* AudioPlaybackHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B50 /* AudioPlaybackHelpers.m */; };
+		A1B2C3D4E5F60718293A4B53 /* AudioPlaybackHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B50 /* AudioPlaybackHelpers.m */; };
+		A1B2C3D4E5F60718293A4B54 /* AudioPlaybackHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B50 /* AudioPlaybackHelpers.m */; };
+		B7C1D2E3F4A5061728394504 /* StatsOverlayFormatting.m in Sources */ = {isa = PBXBuildFile; fileRef = B7C1D2E3F4A5061728394503 /* StatsOverlayFormatting.m */; };
+		B7C1D2E3F4A5061728394505 /* StatsOverlayFormatting.m in Sources */ = {isa = PBXBuildFile; fileRef = B7C1D2E3F4A5061728394503 /* StatsOverlayFormatting.m */; };
+		B7C1D2E3F4A5061728394506 /* StatsOverlayFormatting.m in Sources */ = {isa = PBXBuildFile; fileRef = B7C1D2E3F4A5061728394503 /* StatsOverlayFormatting.m */; };
+		B7C1D2E3F4A5061728394508 /* MoonlightStatsOverlayTests.m in Sources */ = {isa = PBXBuildFile; fileRef = B7C1D2E3F4A5061728394507 /* MoonlightStatsOverlayTests.m */; };
+		B7C1D2E3F4A5061728394509 /* HdrMetadataHelpers.m in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B19 /* HdrMetadataHelpers.m */; };
+		B7C1D2E3F4A506172839450B /* MoonlightHdrMetadataTests.m in Sources */ = {isa = PBXBuildFile; fileRef = B7C1D2E3F4A506172839450A /* MoonlightHdrMetadataTests.m */; };
 		DC1F5A07206436B20037755F /* ConnectionHelper.m in Sources */ = {isa = PBXBuildFile; fileRef = DC1F5A06206436B20037755F /* ConnectionHelper.m */; };
 		F74BEF9C2C1A705600224667 /* OpenSSL in Frameworks */ = {isa = PBXBuildFile; productRef = F74BEF9B2C1A705600224667 /* OpenSSL */; };
 		F74BEFA42C1A80E400224667 /* OpenSSL in Frameworks */ = {isa = PBXBuildFile; productRef = F74BEFA32C1A80E400224667 /* OpenSSL */; };
@@ -129,6 +127,7 @@
 		FB290CFE19B2C406004C83CF /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = FB290CFC19B2C406004C83CF /* InfoPlist.strings */; };
 		FB290D0019B2C406004C83CF /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = FB290CFF19B2C406004C83CF /* main.m */; };
 		FB290D0419B2C406004C83CF /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = FB290D0319B2C406004C83CF /* AppDelegate.m */; };
+		C3E4F5A61728394A5B6C7D03 /* SceneDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = C3E4F5A61728394A5B6C7D02 /* SceneDelegate.m */; };
 		FB290D0719B2C406004C83CF /* Limelight.xcdatamodeld in Sources */ = {isa = PBXBuildFile; fileRef = FB290D0519B2C406004C83CF /* Limelight.xcdatamodeld */; };
 		FB290D0919B2C406004C83CF /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = FB290D0819B2C406004C83CF /* Images.xcassets */; };
 		FB290E7919B37D81004C83CF /* iPad.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = FB290E7819B37D81004C83CF /* iPad.storyboard */; };
@@ -203,32 +202,10 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		A1B2C3D4E5F60718293A4B11 /* AbrBitrateHelpers.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AbrBitrateHelpers.m; sourceTree = "<group>"; };
-		A1B2C3D4E5F60718293A4B12 /* AbrBitrateHelpers.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AbrBitrateHelpers.h; sourceTree = "<group>"; };
-		A1B2C3D4E5F60718293A4B22 /* SoftDropHelpers.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SoftDropHelpers.m; sourceTree = "<group>"; };
-		A1B2C3D4E5F60718293A4B23 /* SoftDropHelpers.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SoftDropHelpers.h; sourceTree = "<group>"; };
-		A1B2C3D4E5F60718293A4B50 /* AudioPlaybackHelpers.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AudioPlaybackHelpers.m; sourceTree = "<group>"; };
-		A1B2C3D4E5F60718293A4B51 /* AudioPlaybackHelpers.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AudioPlaybackHelpers.h; sourceTree = "<group>"; };
-		A1B2C3D4E5F60718293A4B2E /* Av1FormatDescCache.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Av1FormatDescCache.m; sourceTree = "<group>"; };
-		A1B2C3D4E5F60718293A4B2F /* Av1FormatDescCache.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Av1FormatDescCache.h; sourceTree = "<group>"; };
-		A1B2C3D4E5F60718293A4B1D /* NetworkPathMonitor.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = NetworkPathMonitor.m; sourceTree = "<group>"; };
-		A1B2C3D4E5F60718293A4B1E /* NetworkPathMonitor.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NetworkPathMonitor.h; sourceTree = "<group>"; };
-		B7C1D2E3F4A5061728394502 /* StatsOverlayFormatting.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = StatsOverlayFormatting.h; sourceTree = "<group>"; };
-		B7C1D2E3F4A5061728394503 /* StatsOverlayFormatting.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = StatsOverlayFormatting.m; sourceTree = "<group>"; };
-		B7C1D2E3F4A5061728394507 /* MoonlightStatsOverlayTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MoonlightStatsOverlayTests.m; sourceTree = "<group>"; };
-		B7C1D2E3F4A506172839450A /* MoonlightHdrMetadataTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MoonlightHdrMetadataTests.m; sourceTree = "<group>"; };
-
-		A1B2C3D4E5F60718293A4B01 /* AbrController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AbrController.m; sourceTree = "<group>"; };
-		A1B2C3D4E5F60718293A4B02 /* AbrController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AbrController.h; sourceTree = "<group>"; };
-		A1B2C3D4E5F60718293A4B05 /* AnnexBHelpers.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AnnexBHelpers.m; sourceTree = "<group>"; };
-		A1B2C3D4E5F60718293A4B06 /* AnnexBHelpers.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AnnexBHelpers.h; sourceTree = "<group>"; };
-		A1B2C3D4E5F60718293A4B19 /* HdrMetadataHelpers.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HdrMetadataHelpers.m; sourceTree = "<group>"; };
-		A1B2C3D4E5F60718293A4B1A /* HdrMetadataHelpers.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HdrMetadataHelpers.h; sourceTree = "<group>"; };
 		2639EAF244624C7E9F140C0C /* MoonlightPerfHelpersTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MoonlightPerfHelpersTests.m; sourceTree = "<group>"; };
-		7AE9F435BAE0437689FA5AF0 /* MoonlightTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MoonlightTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		B0C1D2E3F405162738495A01 /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = System/Library/Frameworks/XCTest.framework; sourceTree = SDKROOT; };
 		566E9D2B2770B23A00EF7BFE /* Moonlight v1.7.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.7.xcdatamodel"; sourceTree = "<group>"; };
 		693B3A9A218638CD00982F7B /* Settings.bundle */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.plug-in"; path = Settings.bundle; sourceTree = "<group>"; };
+		7AE9F435BAE0437689FA5AF0 /* MoonlightTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MoonlightTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		9803CCAB254F9EAF00EE185E /* ConnectionCallbacks.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ConnectionCallbacks.h; sourceTree = "<group>"; };
 		98132E8C20BC9A62007A053F /* Moonlight v1.1.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.1.xcdatamodel"; sourceTree = "<group>"; };
 		98181BE82791275D00E43572 /* libSDL2.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libSDL2.a; path = libs/SDL2/lib/iOS/libSDL2.a; sourceTree = "<group>"; };
@@ -250,9 +227,6 @@
 		986CCE6C2133E45300168291 /* Moonlight v1.2.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.2.xcdatamodel"; sourceTree = "<group>"; };
 		986E28A528EA989100758361 /* Moonlight v1.9.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.9.xcdatamodel"; sourceTree = "<group>"; };
 		9874E8962AE95E1D00130A3C /* Moonlight v1.10.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.10.xcdatamodel"; sourceTree = "<group>"; };
-		B7C1D2E3F4A5061728394501 /* Moonlight v1.11.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.11.xcdatamodel"; sourceTree = "<group>"; };
-		C8D2E3F4A5B60718293A4503 /* Moonlight v1.12.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.12.xcdatamodel"; sourceTree = "<group>"; };
-		D9E3F4A5B6C708193A4B5604 /* Moonlight v1.13.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.13.xcdatamodel"; sourceTree = "<group>"; };
 		98783FEA242EAC5D00F00EF4 /* Moonlight v1.5.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.5.xcdatamodel"; sourceTree = "<group>"; };
 		98882A032AF60F5300C5A11C /* libavcodec.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libavcodec.a; path = libs/FFmpeg/lib/iOS/libavcodec.a; sourceTree = "<group>"; };
 		98882A042AF60F5300C5A11C /* libavutil.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libavutil.a; path = libs/FFmpeg/lib/iOS/libavutil.a; sourceTree = "<group>"; };
@@ -272,7 +246,30 @@
 		98D5856C1C0EA79600F6CC00 /* TemporaryHost.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = TemporaryHost.m; path = Database/TemporaryHost.m; sourceTree = "<group>"; };
 		98D5856E1C0ED0E800F6CC00 /* TemporarySettings.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = TemporarySettings.h; path = Database/TemporarySettings.h; sourceTree = "<group>"; };
 		98D5856F1C0ED0E800F6CC00 /* TemporarySettings.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; name = TemporarySettings.m; path = Database/TemporarySettings.m; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B01 /* AbrController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AbrController.m; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B02 /* AbrController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AbrController.h; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B05 /* AnnexBHelpers.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AnnexBHelpers.m; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B06 /* AnnexBHelpers.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AnnexBHelpers.h; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B11 /* AbrBitrateHelpers.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AbrBitrateHelpers.m; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B12 /* AbrBitrateHelpers.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AbrBitrateHelpers.h; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B19 /* HdrMetadataHelpers.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = HdrMetadataHelpers.m; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B1A /* HdrMetadataHelpers.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HdrMetadataHelpers.h; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B1D /* NetworkPathMonitor.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = NetworkPathMonitor.m; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B1E /* NetworkPathMonitor.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NetworkPathMonitor.h; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B22 /* SoftDropHelpers.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SoftDropHelpers.m; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B23 /* SoftDropHelpers.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SoftDropHelpers.h; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B2E /* Av1FormatDescCache.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = Av1FormatDescCache.m; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B2F /* Av1FormatDescCache.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Av1FormatDescCache.h; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B50 /* AudioPlaybackHelpers.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AudioPlaybackHelpers.m; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B51 /* AudioPlaybackHelpers.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AudioPlaybackHelpers.h; sourceTree = "<group>"; };
+		B7C1D2E3F4A5061728394501 /* Moonlight v1.11.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.11.xcdatamodel"; sourceTree = "<group>"; };
+		B7C1D2E3F4A5061728394502 /* StatsOverlayFormatting.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = StatsOverlayFormatting.h; sourceTree = "<group>"; };
+		B7C1D2E3F4A5061728394503 /* StatsOverlayFormatting.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = StatsOverlayFormatting.m; sourceTree = "<group>"; };
+		B7C1D2E3F4A5061728394507 /* MoonlightStatsOverlayTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MoonlightStatsOverlayTests.m; sourceTree = "<group>"; };
+		B7C1D2E3F4A506172839450A /* MoonlightHdrMetadataTests.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MoonlightHdrMetadataTests.m; sourceTree = "<group>"; };
+		C8D2E3F4A5B60718293A4503 /* Moonlight v1.12.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.12.xcdatamodel"; sourceTree = "<group>"; };
 		D4746EEA1CBC740C006FB401 /* Moonlight-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "Moonlight-Bridging-Header.h"; path = "Input/Moonlight-Bridging-Header.h"; sourceTree = "<group>"; };
+		D9E3F4A5B6C708193A4B5604 /* Moonlight v1.13.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Moonlight v1.13.xcdatamodel"; sourceTree = "<group>"; };
 		DC1F5A05206436B10037755F /* ConnectionHelper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ConnectionHelper.h; sourceTree = "<group>"; };
 		DC1F5A06206436B20037755F /* ConnectionHelper.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = ConnectionHelper.m; sourceTree = "<group>"; };
 		FB1A674B2131E65900507771 /* KeyboardSupport.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = KeyboardSupport.h; sourceTree = "<group>"; };
@@ -299,6 +296,8 @@
 		FB290D0119B2C406004C83CF /* Limelight-Prefix.pch */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Limelight-Prefix.pch"; sourceTree = "<group>"; };
 		FB290D0219B2C406004C83CF /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
 		FB290D0319B2C406004C83CF /* AppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AppDelegate.m; sourceTree = "<group>"; };
+		C3E4F5A61728394A5B6C7D01 /* SceneDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SceneDelegate.h; sourceTree = "<group>"; };
+		C3E4F5A61728394A5B6C7D02 /* SceneDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = SceneDelegate.m; sourceTree = "<group>"; };
 		FB290D0619B2C406004C83CF /* Limelight.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = Limelight.xcdatamodel; sourceTree = "<group>"; };
 		FB290D0819B2C406004C83CF /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Images.xcassets; sourceTree = "<group>"; };
 		FB290E7819B37D81004C83CF /* iPad.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; path = iPad.storyboard; sourceTree = SOURCE_ROOT; };
@@ -383,6 +382,13 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		CA04994B98F94AA89BCCCCF5 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		FB1A67502132419700507771 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -422,14 +428,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-
-		CA04994B98F94AA89BCCCCF5 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -448,6 +446,16 @@
 				FB1A68152132509400507771 /* libmoonlight-common-tv.a */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		E048FF507B564C238269A4B6 /* MoonlightTests */ = {
+			isa = PBXGroup;
+			children = (
+				2639EAF244624C7E9F140C0C /* MoonlightPerfHelpersTests.m */,
+				B7C1D2E3F4A5061728394507 /* MoonlightStatsOverlayTests.m */,
+				B7C1D2E3F4A506172839450A /* MoonlightHdrMetadataTests.m */,
+			);
+			path = MoonlightTests;
 			sourceTree = "<group>";
 		};
 		FB1A67542132419700507771 /* Moonlight TV */ = {
@@ -526,6 +534,8 @@
 				FB290CFA19B2C406004C83CF /* Supporting Files */,
 				FB290D0219B2C406004C83CF /* AppDelegate.h */,
 				FB290D0319B2C406004C83CF /* AppDelegate.m */,
+				C3E4F5A61728394A5B6C7D01 /* SceneDelegate.h */,
+				C3E4F5A61728394A5B6C7D02 /* SceneDelegate.m */,
 				FBDE86DE19F7A837001C18A8 /* UIComputerView.h */,
 				FBDE86DF19F7A837001C18A8 /* UIComputerView.m */,
 				FBDE86E419F82297001C18A8 /* UIAppView.h */,
@@ -773,20 +783,26 @@
 			name = Database;
 			sourceTree = "<group>";
 		};
-
-		E048FF507B564C238269A4B6 /* MoonlightTests */ = {
-			isa = PBXGroup;
-			children = (
-				2639EAF244624C7E9F140C0C /* MoonlightPerfHelpersTests.m */,
-				B7C1D2E3F4A5061728394507 /* MoonlightStatsOverlayTests.m */,
-				B7C1D2E3F4A506172839450A /* MoonlightHdrMetadataTests.m */,
-			);
-			path = MoonlightTests;
-			sourceTree = "<group>";
-		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		467F19BB77FA4C89BAE96E16 /* MoonlightTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 45BB13BBF3CD44889D924006 /* Build configuration list for PBXNativeTarget "MoonlightTests" */;
+			buildPhases = (
+				D22ABDBF649043758CF10EF9 /* Sources */,
+				CA04994B98F94AA89BCCCCF5 /* Frameworks */,
+				7706A489CAE94459B926C550 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MoonlightTests;
+			productName = MoonlightTests;
+			productReference = 7AE9F435BAE0437689FA5AF0 /* MoonlightTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		FB1A67522132419700507771 /* Moonlight TV */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = FB1A67682132419A00507771 /* Build configuration list for PBXNativeTarget "Moonlight TV" */;
@@ -829,24 +845,6 @@
 			productReference = FB290CEE19B2C406004C83CF /* Moonlight.app */;
 			productType = "com.apple.product-type.application";
 		};
-
-		467F19BB77FA4C89BAE96E16 /* MoonlightTests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 45BB13BBF3CD44889D924006 /* Build configuration list for PBXNativeTarget "MoonlightTests" */;
-			buildPhases = (
-				D22ABDBF649043758CF10EF9 /* Sources */,
-				CA04994B98F94AA89BCCCCF5 /* Frameworks */,
-				7706A489CAE94459B926C550 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			name = MoonlightTests;
-			productName = MoonlightTests;
-			productReference = 7AE9F435BAE0437689FA5AF0 /* MoonlightTests.xctest */;
-			productType = "com.apple.product-type.bundle.unit-test";
-		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -857,6 +855,11 @@
 				LastUpgradeCheck = 1400;
 				ORGANIZATIONNAME = "Moonlight Game Streaming Project";
 				TargetAttributes = {
+					467F19BB77FA4C89BAE96E16 = {
+						CreatedOnToolsVersion = 15.0;
+						ProvisioningStyle = Automatic;
+						TestTargetID = FB290CED19B2C406004C83CF;
+					};
 					FB1A67522132419700507771 = {
 						CreatedOnToolsVersion = 9.4.1;
 						LastSwiftMigration = 1140;
@@ -869,11 +872,6 @@
 					};
 					FB290CED19B2C406004C83CF = {
 						LastSwiftMigration = 1140;
-					};
-					467F19BB77FA4C89BAE96E16 = {
-						CreatedOnToolsVersion = 15.0;
-						ProvisioningStyle = Automatic;
-						TestTargetID = FB290CED19B2C406004C83CF;
 					};
 				};
 			};
@@ -924,6 +922,13 @@
 /* End PBXReferenceProxy section */
 
 /* Begin PBXResourcesBuildPhase section */
+		7706A489CAE94459B926C550 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		FB1A67512132419700507771 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -947,17 +952,29 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-
-		7706A489CAE94459B926C550 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		D22ABDBF649043758CF10EF9 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8CE916B7B43F4C1C87CDB6EC /* MoonlightPerfHelpersTests.m in Sources */,
+				B7C1D2E3F4A5061728394508 /* MoonlightStatsOverlayTests.m in Sources */,
+				B7C1D2E3F4A506172839450B /* MoonlightHdrMetadataTests.m in Sources */,
+				A1B2C3D4E5F60718293A4B15 /* AbrBitrateHelpers.m in Sources */,
+				A1B2C3D4E5F60718293A4B26 /* SoftDropHelpers.m in Sources */,
+				A1B2C3D4E5F60718293A4B54 /* AudioPlaybackHelpers.m in Sources */,
+				A1B2C3D4E5F60718293A4B32 /* Av1FormatDescCache.m in Sources */,
+				B7C1D2E3F4A5061728394506 /* StatsOverlayFormatting.m in Sources */,
+				B7C1D2E3F4A5061728394509 /* HdrMetadataHelpers.m in Sources */,
+				A1B2C3D4E5F60718293A4B16 /* AnnexBHelpers.m in Sources */,
+				A1B2C3D4E5F60718293A4B17 /* Utils.m in Sources */,
+				A1B2C3D4E5F60718293A4B21 /* NetworkPathMonitor.m in Sources */,
+				A1B2C3D4E5F60718293A4B18 /* Logger.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		FB1A674F2132419700507771 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -1030,6 +1047,7 @@
 				FB1A674D2131E65900507771 /* KeyboardSupport.m in Sources */,
 				FB89463219F646E200339C8A /* VideoDecoderRenderer.m in Sources */,
 				FB290D0419B2C406004C83CF /* AppDelegate.m in Sources */,
+				C3E4F5A61728394A5B6C7D03 /* SceneDelegate.m in Sources */,
 				FB9AFD401A7E127D00872C98 /* AppListResponse.m in Sources */,
 				FB89463419F646E200339C8A /* Utils.m in Sources */,
 				A1B2C3D4E5F60718293A4B1F /* NetworkPathMonitor.m in Sources */,
@@ -1085,27 +1103,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-
-		D22ABDBF649043758CF10EF9 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				8CE916B7B43F4C1C87CDB6EC /* MoonlightPerfHelpersTests.m in Sources */,
-				B7C1D2E3F4A5061728394508 /* MoonlightStatsOverlayTests.m in Sources */,
-				B7C1D2E3F4A506172839450B /* MoonlightHdrMetadataTests.m in Sources */,
-				A1B2C3D4E5F60718293A4B15 /* AbrBitrateHelpers.m in Sources */,
-				A1B2C3D4E5F60718293A4B26 /* SoftDropHelpers.m in Sources */,
-				A1B2C3D4E5F60718293A4B54 /* AudioPlaybackHelpers.m in Sources */,
-				A1B2C3D4E5F60718293A4B32 /* Av1FormatDescCache.m in Sources */,
-				B7C1D2E3F4A5061728394506 /* StatsOverlayFormatting.m in Sources */,
-				B7C1D2E3F4A5061728394509 /* HdrMetadataHelpers.m in Sources */,
-				A1B2C3D4E5F60718293A4B16 /* AnnexBHelpers.m in Sources */,
-				A1B2C3D4E5F60718293A4B17 /* Utils.m in Sources */,
-				A1B2C3D4E5F60718293A4B21 /* NetworkPathMonitor.m in Sources */,
-				A1B2C3D4E5F60718293A4B18 /* Logger.m in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -1118,18 +1115,6 @@
 			isa = PBXTargetDependency;
 			name = "moonlight-common-tv";
 			targetProxy = FB1A68162132509800507771 /* PBXContainerItemProxy */;
-		};
-
-		05BE92AC877B4133BE1057B5 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = FB290CED19B2C406004C83CF /* Moonlight */;
-			targetProxy = 31489B1FCA96465ABCDEB39B /* PBXContainerItemProxy */;
-		};
-
-		05BE92AC877B4133BE1057B5 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = FB290CED19B2C406004C83CF /* Moonlight */;
-			targetProxy = 31489B1FCA96465ABCDEB39B /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -1153,6 +1138,66 @@
 /* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
+		6446058411734D8194E37DFD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_STYLE = Automatic;
+				GCC_PRECOMPILE_PREFIX_HEADER = YES;
+				GCC_PREFIX_HEADER = "Limelight/Limelight-Prefix.pch";
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(PROJECT_DIR)/Limelight",
+					"$(PROJECT_DIR)/Limelight/Utility",
+					"$(PROJECT_DIR)/Limelight/Stream",
+					"$(PROJECT_DIR)/Limelight/Network",
+					"$(PROJECT_DIR)/Limelight/Database",
+					"$(PROJECT_DIR)/moonlight-common/moonlight-common-c/src",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.moonlight.MoonlightTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		D150C92F25F645EAB8091FC4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CODE_SIGN_STYLE = Automatic;
+				GCC_PRECOMPILE_PREFIX_HEADER = YES;
+				GCC_PREFIX_HEADER = "Limelight/Limelight-Prefix.pch";
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(PROJECT_DIR)/Limelight",
+					"$(PROJECT_DIR)/Limelight/Utility",
+					"$(PROJECT_DIR)/Limelight/Stream",
+					"$(PROJECT_DIR)/Limelight/Network",
+					"$(PROJECT_DIR)/Limelight/Database",
+					"$(PROJECT_DIR)/moonlight-common/moonlight-common-c/src",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.moonlight.MoonlightTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		FB1A67662132419A00507771 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1382,7 +1427,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = DM46QST4M7;
+				DEVELOPMENT_TEAM = 6JB56N574G;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "Limelight/Limelight-Prefix.pch";
 				HEADER_SEARCH_PATHS = (
@@ -1411,7 +1456,7 @@
 					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS-Sim",
 				);
 				MARKETING_VERSION = 9.0.2;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream.Moonlight";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream-dev.Moonlight";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
 				SKIP_INSTALL = NO;
@@ -1432,7 +1477,7 @@
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = DM46QST4M7;
+				DEVELOPMENT_TEAM = 6JB56N574G;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				GCC_PREFIX_HEADER = "Limelight/Limelight-Prefix.pch";
 				HEADER_SEARCH_PATHS = (
@@ -1461,7 +1506,7 @@
 					"$(PROJECT_DIR)/libs/FFmpeg/lib/iOS-Sim",
 				);
 				MARKETING_VERSION = 9.0.2;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream.Moonlight";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.moonlight-stream-dev.Moonlight";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE = "";
 				SKIP_INSTALL = NO;
@@ -1475,70 +1520,18 @@
 			};
 			name = Release;
 		};
-
-		6446058411734D8194E37DFD /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				CODE_SIGN_STYLE = Automatic;
-				GCC_PRECOMPILE_PREFIX_HEADER = YES;
-				GCC_PREFIX_HEADER = "Limelight/Limelight-Prefix.pch";
-				GENERATE_INFOPLIST_FILE = YES;
-				HEADER_SEARCH_PATHS = (
-					"$(PROJECT_DIR)/Limelight",
-					"$(PROJECT_DIR)/Limelight/Utility",
-					"$(PROJECT_DIR)/Limelight/Stream",
-					"$(PROJECT_DIR)/Limelight/Network",
-					"$(PROJECT_DIR)/Limelight/Database",
-					"$(PROJECT_DIR)/moonlight-common/moonlight-common-c/src",
-				);
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.moonlight.MoonlightTests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Debug;
-		};
-		D150C92F25F645EAB8091FC4 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				CODE_SIGN_STYLE = Automatic;
-				GCC_PRECOMPILE_PREFIX_HEADER = YES;
-				GCC_PREFIX_HEADER = "Limelight/Limelight-Prefix.pch";
-				GENERATE_INFOPLIST_FILE = YES;
-				HEADER_SEARCH_PATHS = (
-					"$(PROJECT_DIR)/Limelight",
-					"$(PROJECT_DIR)/Limelight/Utility",
-					"$(PROJECT_DIR)/Limelight/Stream",
-					"$(PROJECT_DIR)/Limelight/Network",
-					"$(PROJECT_DIR)/Limelight/Database",
-					"$(PROJECT_DIR)/moonlight-common/moonlight-common-c/src",
-				);
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.moonlight.MoonlightTests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Release;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		45BB13BBF3CD44889D924006 /* Build configuration list for PBXNativeTarget "MoonlightTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6446058411734D8194E37DFD /* Debug */,
+				D150C92F25F645EAB8091FC4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		FB1A67682132419A00507771 /* Build configuration list for PBXNativeTarget "Moonlight TV" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -1562,16 +1555,6 @@
 			buildConfigurations = (
 				FB290D2119B2C406004C83CF /* Debug */,
 				FB290D2219B2C406004C83CF /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-
-		45BB13BBF3CD44889D924006 /* Build configuration list for PBXNativeTarget "MoonlightTests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				6446058411734D8194E37DFD /* Debug */,
-				D150C92F25F645EAB8091FC4 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
